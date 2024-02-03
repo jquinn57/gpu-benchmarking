@@ -6,7 +6,46 @@ import time
 import numpy as np
 import cv2
 import glob
+import os
 import math
+import threading
+import queue
+
+class GPUBenchmark():
+    def __init__(self, settings):
+        self.settings = settings
+        self.image_q = queue.Queue()
+        self.running = False
+
+
+
+    def image_worker(self, res):
+        n = 0
+        while self.running and n < self.num_images:
+            img = cv2.imread(img_filename)
+            img = cv2.resize(img, (res, res)).astype(np.float32) / 255.0
+            img = np.transpose(img, (2, 0, 1))
+            self.image_q.put(img)
+            n += 1
+
+    def run_test(self, model_config, batch_size):
+        '''
+        Run a test with one condition
+        '''
+        if 'image_path' in self.settings and self.settings['image_path']:
+            self.load_images = True
+            self.image_list = glob.glob(self.settings['image_path'] + '/*.jpg')
+            self.num_images = min(len(image_list), self.settings['num_images'])
+        else: # use random data instead of actual images
+            self.load_images = False
+            self.image_list = []
+            self.num_images = self.settings['num_images']
+        
+        self.thread = threading.Thread(target=self.image_worker, model_config['resolution'])
+        self.running = True
+        self.thread.start()
+
+
 
 def run_test(settings, model_config):
 
@@ -21,19 +60,37 @@ def run_test(settings, model_config):
     print(input_shape)
     res = model_config['resolution']
     fps_batch = {}
-    
-    for batch_size in model_config['batch_sizes']:
-        nbatches = int(math.floor(settings['num_images'] / batch_size))
 
-        img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
-        # warm up batch
-        y = session.run(output_names, {input_name: img_batch})[0]
+    if 'image_path' in settings and settings['image_path']:
+        load_images = True
+        image_list = glob.glob(settings['image_path'] + '/*.jpg')
+        num_images = min(len(image_list), settings['num_images'])
+    else: # use random data instead of actual images
+        load_images = False
+        image_list = []
+        num_images = settings['num_images']
+
+    for batch_size in model_config['batch_sizes']:
+        is_warm = False
+        nbatches = int(math.floor(num_images / batch_size))
         count = 0
 
         t0 = time.perf_counter()
         for n in range(nbatches):
+
+            if load_images:
+                img_batch = load_image_batch(image_list[count:count + batch_size], res)
+            else:
+                img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
             y = session.run(output_names, {input_name: img_batch})[0]
             count += batch_size
+            # restart the counter and timer after warmup batch
+            if not is_warm:
+                count = 0
+                is_warm = True
+                t0 = time.perf_counter()
+
+
 
         dt = time.perf_counter() - t0
 
@@ -52,12 +109,15 @@ def main():
     with open(args.config) as fp:
         config = yaml.safe_load(fp)
     pprint.pprint(config)
+    gpu_benchmark = GPUBenchmark(config['settings'])
 
     for model in config['models']:
         print()
         print(model)
-        fps_batch = run_test(config['settings'], config['models'][model])
-        pprint.pprint(fps_batch)
+        batch_size = 1
+        gpu_benchmark.run_test(config['models'][model], batch_size)
+        #fps_batch = 
+        #pprint.pprint(fps_batch)
 
 
 if __name__ == '__main__':
