@@ -3,6 +3,7 @@ settings:
   num_images: 1000
   onnx_ep: cuda
   power: pmd
+  image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
   resnet18:
     filename: ./models/resnet18.onnx
