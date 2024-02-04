@@ -10,11 +10,19 @@ import os
 import math
 import threading
 import queue
+from pmd_reader import PMDReader
 
 class GPUBenchmark():
     def __init__(self, settings):
         self.settings = settings
-
+        # TODO: add option to read power via nvidia-smi
+        self.power_reader = None
+        if 'power' in settings and settings['power'] == 'pmd':
+            self.power_reader = PMDReader()
+            if not self.power_reader.check_device():
+                print('PMD not found')
+                self.power_reader = None
+            
     def image_worker(self, res):
         n = 0
         while self.running and n < self.num_images:
@@ -29,6 +37,7 @@ class GPUBenchmark():
         '''
         Run a test with one condition
         '''
+
         if 'image_path' in self.settings and self.settings['image_path']:
             self.load_images = True
             self.image_list = glob.glob(self.settings['image_path'] + '/*.jpg')
@@ -50,7 +59,6 @@ class GPUBenchmark():
         print(input_name)
         print(input_shape)
         res = model_config['resolution']
-        fps_batch = {}
 
         is_warm = False
         nbatches = int(math.floor(self.num_images / batch_size))
@@ -60,6 +68,9 @@ class GPUBenchmark():
             self.thread = threading.Thread(target=self.image_worker, args=(model_config['resolution'], ))
             self.running = True
             self.thread.start()
+
+        if self.power_reader:
+            self.power_reader.start_reading()
 
         t0 = time.perf_counter()
         for n in range(nbatches):
@@ -81,16 +92,23 @@ class GPUBenchmark():
 
         dt = time.perf_counter() - t0
         time_per_image = 1000 * dt / count
-        fps = count / dt
-        fps_batch[batch_size] = fps
-        print(f'Batch size: {batch_size}, Time per image: {time_per_image} ms, FPS: {fps}')
-        return fps_batch
+        fps = int(round(count / dt))
+
+        if self.power_reader:
+            self.power_reader.stop_reading()
+            power_avg = int(round(self.power_reader.avg_recent_readings()))
+        else:
+            power_avg = 0
+        
+        print(f'Batch size: {batch_size}, Time per image: {dt} / {count} = {time_per_image} ms, FPS: {fps}, Power: {power_avg} W')
+        return fps, power_avg
 
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', help='Path to config yaml', default='config.yaml')
+    parser.add_argument('--config', help='Path to config yaml', default='config_gpu.yaml')
+    parser.add_argument('--output_csv', help='Path to output csv', default='output_gpu.csv')
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -98,12 +116,19 @@ def main():
     pprint.pprint(config)
     gpu_benchmark = GPUBenchmark(config['settings'])
 
+    output = ['Model, Resolution, Batch Size, FPS, Power']
     for model in config['models']:
         print()
         print(model)
         model_config = config['models'][model]
+        res = model_config['resolution']
         for batch_size in model_config['batch_sizes']:
-            gpu_benchmark.run_test(model_config, batch_size)
+            fps, power = gpu_benchmark.run_test(model_config, batch_size)
+            output.append(f'{model}, {res}, {batch_size}, {fps}, {power}')
+    
+    with open(args.output_csv, 'wt') as fp:
+        for line in output:
+            fp.write(line + '\n')
 
 
 if __name__ == '__main__':

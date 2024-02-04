@@ -1,5 +1,8 @@
 import serial
 import time
+import queue
+import threading
+import numpy as np
 
 '''
 Get the CH341 driver from here: https://github.com/WCHSoftGroup/ch341ser_linux
@@ -28,7 +31,45 @@ class PMDReader():
         except serial.SerialException:
             print(f"{self.pmd_settings['port']} not able to connect")
             self.ser = None
-        
+        self.running = False
+        self.sensors = ['PCIE1', 'PCIE2', 'EPS1', 'EPS2']
+
+    def start_reading(self):
+        self.running = True
+        self.power_q = queue.Queue()
+        self.worker_thread = threading.Thread(target=self.sensor_reader)
+        self.worker_thread.start()
+        print('Power reading started')
+
+    def stop_reading(self):
+        self.running = False
+        self.worker_thread.join()
+        print('Power reading stopped')
+
+    def avg_recent_readings(self):
+        '''
+        return the average of recent readings
+        '''
+        vs = [self.power_q.get()]
+        while not self.power_q.empty():
+            vs.append(self.power_q.get())
+        vs = np.array(vs)
+        print(vs)
+        print(vs.min())
+        print(vs.max())
+        print(vs.mean())
+        return vs.mean()
+
+
+    def sensor_reader(self, selected_sensor='PCIE1', dt_s=1):
+        '''
+        read the sensor at interval dt_s and put readings in the queue
+        '''
+        while self.running:
+            power = self.get_new_sensor_values()[selected_sensor]
+            self.power_q.put(power)
+            time.sleep(dt_s)
+
     def check_device(self):
         # b'\x00'   welcome message
         # b'\x01'   ID
@@ -41,13 +82,8 @@ class PMDReader():
         self.ser.write(b'\x00')
         self.ser.flush()
         read_bytes = self.ser.read(18)
-        assert read_bytes == b'ElmorLabs PMD-USB'
-
-        # check sensor struct
-        self.ser.write(b'\x02')
-        self.ser.flush()
-        read_bytes = self.ser.read(100)
-        print('Struct: ', read_bytes)
+        device_detected = (read_bytes == b'ElmorLabs PMD-USB')
+        return device_detected
 
     def get_new_sensor_values(self):
         command = b'\x03'
@@ -55,19 +91,18 @@ class PMDReader():
         self.ser.flush()
         read_bytes = self.ser.read(16)
 
-        sensors = ['PCIE1', 'PCIE2', 'EPS1', 'EPS2']
-        power_vals = []
+        power_vals = {}
 
-        for i, name in enumerate(sensors):
-
+        for i, name in enumerate(self.sensors):
             # convert bytes to float values
             voltage_value = int.from_bytes(read_bytes[i*4:i*4+2], byteorder='little')*0.01
             current_value = int.from_bytes(read_bytes[i*4+2:i*4+4], byteorder='little')*0.1
             power_value = voltage_value * current_value
-            print(f'{sensors[i]}: {power_value} Watts')
-            power_vals.append(power_value)
+            power_vals[self.sensors[i]] = power_value
 
         return power_vals
+    
+
 
 def main():
     pmd = PMDReader()
