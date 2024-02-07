@@ -53,6 +53,7 @@ class MX3Benchmark():
         accl.connect_input(self.data_source) # starts asynchronous execution of input generating callback
         accl.connect_output(self.output_processor) # starts asynchronous execution of output processing callback
 
+        self.count = 0
         t0 = time.perf_counter()
         accl.wait() # wait for the accelerator to finish execution
         t1 = time.perf_counter()

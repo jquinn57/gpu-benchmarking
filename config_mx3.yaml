@@ -1,18 +1,12 @@
 ---
 settings:
   num_images: 1000
-  onnx_ep: cuda
-  power: pmd
+  power: None
   image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
-  # resnet18:
-  #   filename: ./models/resnet18.onnx
-  #   batch_sizes: [1, 2, 4]
-  #   resolution: 224
-  # resnet152:
-  #   filename: ./models/resnet152.onnx
-  #   batch_sizes: [1, 2, 4]
-  #   resolution: 224
+  resnet18:
+    filename: ./models/resnet18.dfp
+    resolution: 224
   yolov5s:
     filename: ./models/yolov5s-leakyrelu_mx3p.dfp
     #post_processing: ./models/model_0_yolov5s-leakyrelu_mx3p_post.onnx
