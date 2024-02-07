@@ -11,7 +11,6 @@ import threading
 import queue
 from memryx import AsyncAccl
 
-
 class MX3Benchmark():
     def __init__(self, settings):
         self.settings = settings
@@ -26,33 +25,30 @@ class MX3Benchmark():
              self.image_list = []
              self.num_images = self.settings['num_images']
 
-        # if 'power' in settings and settings['power'] == 'pmd':
-        #     self.power_reader = PMDReader()
-        #     if not self.power_reader.check_device():
-        #         print('PMD not found')
-        #         self.power_reader = None
-            
 
     def data_source(self):
-        res = 640
         for img_filename in self.image_list[:self.num_images]:
-            print(img_filename)
             img = cv2.imread(img_filename)
-            img = cv2.resize(img, (res, res)).astype(np.float32)
+            img = cv2.resize(img, (self.resolution, self.resolution)).astype(np.float32)
             yield img
     
     def output_processor(self, *outputs):
         self.count += 1
-        print('done')
 
 
     def run_test(self, model_config):
         # Accelerate using the MemryX hardware
         dfp_filename = model_config['filename']
+        self.resolution = model_config['resolution']
         accl = AsyncAccl(dfp_filename)
-        onnx_filename = 'model_0_' + dfp_filename.replace('.dfp', '_post.onnx')
-        if os.path.exists(onnx_filename):
-            accl.set_postprocessing_model(onnx_filename)
+        #model_dir = os.path.dirname(dfp_filename)
+        #dfp_basename = os.path.basename(dfp_filename)
+        #onnx_filename = os.path.join(model_dir, 'model_0_' + dfp_basename.replace('.dfp', '_post.onnx'))
+        if 'post_processing' in model_config:
+            onnx_filename = model_config['post_processing']
+            if os.path.exists(onnx_filename):
+                print(f'Including post processing {onnx_filename}')
+                accl.set_postprocessing_model(onnx_filename)
 
         accl.connect_input(self.data_source) # starts asynchronous execution of input generating callback
         accl.connect_output(self.output_processor) # starts asynchronous execution of output processing callback
@@ -63,6 +59,7 @@ class MX3Benchmark():
 
         fps = self.count / (t1 - t0)
         inference_time_ms = 1000 * (t1 - t0) / self.count
+        print(f'frame count: {self.count}')
         print(f'inference time ms: {inference_time_ms}')
         print(f'FPS: {fps}')
         return fps, 0
