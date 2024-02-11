@@ -27,11 +27,16 @@ class MX3Benchmark():
 
 
     def data_source(self):
-        for img_filename in self.image_list[:self.num_images]:
-            img = cv2.imread(img_filename)
-            img = cv2.resize(img, (self.resolution, self.resolution)).astype(np.float32)
-            yield img
-    
+        if self.load_images:
+            for img_filename in self.image_list[:self.num_images]:
+                img = cv2.imread(img_filename)
+                img = cv2.resize(img, (self.resolution, self.resolution)).astype(np.float32)
+                yield img
+        else:
+            for n in range(self.num_images):
+                img = np.random.random((self.resolution, self.resolution, 3)).astype(np.float32)
+                yield img
+        
     def output_processor(self, *outputs):
         self.count += 1
 

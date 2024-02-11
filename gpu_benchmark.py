@@ -11,17 +11,22 @@ import math
 import threading
 import queue
 from pmd_reader import PMDReader
+from kasa_reader import KasaReader
 
 class GPUBenchmark():
     def __init__(self, settings):
         self.settings = settings
         # TODO: add option to read power via nvidia-smi
-        self.power_reader = None
-        if 'power' in settings and settings['power'] == 'pmd':
-            self.power_reader = PMDReader()
-            if not self.power_reader.check_device():
+        self.pmd_reader = None
+        if 'pmd' in settings:
+            self.pmd_reader = PMDReader(*settings['pmd'])
+            if not self.pmd_reader.check_device():
                 print('PMD not found')
-                self.power_reader = None
+                self.pmd_reader = None
+        self.kasa_reader = None
+        if 'kasa' in settings:
+            self.kasa_reader = KasaReader(*settings['kasa'])
+
             
     def image_worker(self, res):
         n = 0
@@ -33,7 +38,7 @@ class GPUBenchmark():
             self.image_q.put(img)
             n += 1
 
-    def run_test(self, model_config, batch_size):
+    def run_test(self, model_config, batch_size, do_inference=True):
         '''
         Run a test with one condition
         '''
@@ -49,15 +54,17 @@ class GPUBenchmark():
             self.image_list = []
             self.num_images = self.settings['num_images']
         
-        use_cuda = self.settings['onnx_ep'] == 'cuda'
-        providers = ['CUDAExecutionProvider'] if use_cuda else  ['TensorrtExecutionProvider']
-        session = onnxruntime.InferenceSession(model_config['filename'], providers=providers)
-        output_names = [x.name for x in session.get_outputs()]
-        print(output_names)
-        input_name = session.get_inputs()[0].name
-        input_shape = session.get_inputs()[0].shape
-        print(input_name)
-        print(input_shape)
+        if do_inference:
+            use_cuda = self.settings['onnx_ep'] == 'cuda'
+            providers = ['CUDAExecutionProvider'] if use_cuda else  ['TensorrtExecutionProvider']
+            session = onnxruntime.InferenceSession(model_config['filename'], providers=providers)
+            output_names = [x.name for x in session.get_outputs()]
+            print(output_names)
+            input_name = session.get_inputs()[0].name
+            input_shape = session.get_inputs()[0].shape
+            print(input_name)
+            print(input_shape)
+
         res = model_config['resolution']
 
         is_warm = False
@@ -69,8 +76,10 @@ class GPUBenchmark():
             self.running = True
             self.thread.start()
 
-        if self.power_reader:
-            self.power_reader.start_reading()
+        if self.pmd_reader:
+            self.pmd_reader.start_reading()
+        if self.kasa_reader:
+            self.kasa_reader.start_reading()
 
         t0 = time.perf_counter()
         for n in range(nbatches):
@@ -82,7 +91,11 @@ class GPUBenchmark():
             else:
                 img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
             
-            y = session.run(output_names, {input_name: img_batch})[0]
+            if do_inference:
+                y = session.run(output_names, {input_name: img_batch})[0]
+            else:
+                time.sleep(0.01)
+            
             count += batch_size
             # restart the counter and timer after warmup batch
             if not is_warm:
@@ -94,14 +107,20 @@ class GPUBenchmark():
         time_per_image = 1000 * dt / count
         fps = int(round(count / dt))
 
-        if self.power_reader:
-            self.power_reader.stop_reading()
-            power_avg = int(round(self.power_reader.avg_recent_readings()))
+        if self.pmd_reader:
+            self.pmd_reader.stop_reading()
+            power_avg_pmd = int(round(self.pmd_reader.avg_recent_readings()))
         else:
-            power_avg = 0
+            power_avg_pmd = 0
         
-        print(f'Batch size: {batch_size}, Time per image: {dt} / {count} = {time_per_image} ms, FPS: {fps}, Power: {power_avg} W')
-        return fps, power_avg
+        if self.kasa_reader:
+            self.kasa_reader.stop_reading()
+            power_avg_kasa = int(round(self.kasa_reader.avg_recent_readings()))
+        else:
+            power_avg_kasa = 0
+        
+        print(f'Batch size: {batch_size}, Time per image: {dt} / {count} = {time_per_image} ms, FPS: {fps}, Power (PMD): {power_avg_pmd} W, Power (Kasa): {power_avg_kasa} W')
+        return fps, power_avg_pmd, power_avg_kasa
 
 
 
@@ -116,15 +135,15 @@ def main():
     pprint.pprint(config)
     gpu_benchmark = GPUBenchmark(config['settings'])
 
-    output = ['Model, Resolution, Batch Size, FPS, Power']
+    output = ['Model, Resolution, Batch Size, FPS, Power(PMD), Power(Kasa)']
     for model in config['models']:
         print()
         print(model)
         model_config = config['models'][model]
         res = model_config['resolution']
         for batch_size in model_config['batch_sizes']:
-            fps, power = gpu_benchmark.run_test(model_config, batch_size)
-            output.append(f'{model}, {res}, {batch_size}, {fps}, {power}')
+            fps, power_pmd, power_kasa = gpu_benchmark.run_test(model_config, batch_size, do_inference=True)
+            output.append(f'{model}, {res}, {batch_size}, {fps}, {power_pmd}, {power_kasa}')
     
     with open(args.output_csv, 'wt') as fp:
         for line in output:

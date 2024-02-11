@@ -1,8 +1,5 @@
 import asyncio
 from kasa import SmartStrip, SmartPlug
-from IPython import embed
-import time
-import requests
 # pip install python-kasa
 # run on command line to discover devices on local network: kasa discover
 
@@ -17,7 +14,6 @@ async def update():
         power = await sp.get_emeter_realtime()
         print(power.power)
         await asyncio.sleep(2)
-
 
 
 if __name__ == "__main__":

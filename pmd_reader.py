@@ -25,14 +25,19 @@ class PMDReader():
         'timeout':1
         }
     
-    def __init__(self):
+    def __init__(self, port, sensor_name):
         try:
+            self.pmd_settings['port'] = port
             self.ser = serial.Serial(**self.pmd_settings)
         except serial.SerialException:
             print(f"{self.pmd_settings['port']} not able to connect")
             self.ser = None
         self.running = False
         self.sensors = ['PCIE1', 'PCIE2', 'EPS1', 'EPS2']
+        assert sensor_name in self.sensors
+        self.selected_sensor = sensor_name
+        self.dt_s = 0.5  # time in seconds to pause in between readings
+
 
     def start_reading(self):
         self.running = True
@@ -61,14 +66,14 @@ class PMDReader():
         return vs.mean()
 
 
-    def sensor_reader(self, selected_sensor='PCIE1', dt_s=1):
+    def sensor_reader(self):
         '''
         read the sensor at interval dt_s and put readings in the queue
         '''
         while self.running:
-            power = self.get_new_sensor_values()[selected_sensor]
+            power = self.get_new_sensor_values()[self.selected_sensor]
             self.power_q.put(power)
-            time.sleep(dt_s)
+            time.sleep(self.dt_s)
 
     def check_device(self):
         # b'\x00'   welcome message
@@ -103,7 +108,6 @@ class PMDReader():
         return power_vals
     
 
-
 def main():
     pmd = PMDReader()
     pmd.check_device()
@@ -112,8 +116,6 @@ def main():
         pmd.get_new_sensor_values()
         print()
         time.sleep(1)
-
-
     
 if __name__ == '__main__':
     main()

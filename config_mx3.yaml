@@ -2,12 +2,16 @@
 settings:
   num_images: 1000
   power: None
-  image_path: /home/jquinn/datasets/coco/images/val2017/
+  #image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
-  resnet18:
-    filename: ./models/resnet18.dfp
-    resolution: 224
-  yolov5s:
+  # resnet18:
+  #   filename: ./models/resnet18.dfp
+  #   resolution: 224
+  # yolov5n-SiLU:
+  #   filename: ./models/yolov5n-SiLU.dfp
+  #   #post_processing: ./models/model_0_olov5n-SiLU_post.onnx
+  #   resolution: 640
+  yolov5s-LeakyReLU:
     filename: ./models/yolov5s-leakyrelu_mx3p.dfp
     #post_processing: ./models/model_0_yolov5s-leakyrelu_mx3p_post.onnx
     resolution: 640
