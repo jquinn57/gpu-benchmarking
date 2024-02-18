@@ -79,12 +79,22 @@ class MX3Benchmark():
         dt = t1 - t0
         fps = self.count / dt
         inference_time_ms = 1000 * dt  / self.count
-        print(f'frame count: {self.count}')
-        print(f'inference time ms: {inference_time_ms}')
-        print(f'FPS: {fps}')
-        print(f'Time per image: {dt} / {self.count} = {inference_time_ms} ms, FPS: {fps} , Power (System): {power_avg_kasa} W')
-        return fps, power_avg_kasa
+        # TODO:
+        latency_ms = 0
     
+        output = {}
+        output['batch_size'] = 1
+        output['inference_time_ms'] = inference_time_ms
+        output['fps'] = fps
+        output['system_power'] = power_avg_kasa
+        output['pcie_power'] = 0
+        output['count'] = self.count
+        output['total_time_s'] = dt
+        output['latency_ms'] = latency_ms
+        pprint.pprint(output)
+        return output
+    
+
     def shutdown(self):
         if self.kasa_reader:
             self.kasa_reader.stop_reading()
@@ -101,19 +111,19 @@ def main():
     pprint.pprint(config)
     mx3_benchmark = MX3Benchmark(config['settings'])
 
-    output = ['Model, Resolution, Batch Size, FPS, Power(System)']
+    outputs = ['Model, Resolution, Batch Size, FPS, Latency(ms), PCIe Power, System Power']
     for model in config['models']:
         print()
         print(model)
         model_config = config['models'][model]
         res = model_config['resolution']
         batch_size = 1
-        fps, power = mx3_benchmark.run_test(model_config)
-        output.append(f'{model}, {res}, {batch_size}, {fps}, {power}')
+        data = mx3_benchmark.run_test(model_config)
+        outputs.append(f"{model}, {res}, {batch_size}, {data['fps']}, {data['latency_ms']}, {data['pcie_power']}, {data['system_power']}")
     
     mx3_benchmark.shutdown()
     with open(args.output_csv, 'wt') as fp:
-        for line in output:
+        for line in outputs:
             fp.write(line + '\n')
 
 
