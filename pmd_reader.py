@@ -40,16 +40,18 @@ class PMDReader():
 
 
     def start_reading(self):
-        self.running = True
-        self.power_q = queue.Queue()
-        self.worker_thread = threading.Thread(target=self.sensor_reader)
-        self.worker_thread.start()
-        print('Power reading started')
+        if not self.running:
+            self.running = True
+            self.power_q = queue.Queue()
+            self.worker_thread = threading.Thread(target=self.sensor_reader)
+            self.worker_thread.start()
+            print('Power reading started')
 
     def stop_reading(self):
-        self.running = False
-        self.worker_thread.join()
-        print('Power reading stopped')
+        if self.running:
+            self.running = False
+            self.worker_thread.join()
+            print('Power reading stopped')
 
     def avg_recent_readings(self):
         '''

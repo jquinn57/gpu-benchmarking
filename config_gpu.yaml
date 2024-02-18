@@ -6,11 +6,7 @@ settings:
   kasa: ['192.168.1.87', 'workstation']
   image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
-  yolov5s:
+  yolov5s-LeakyReLU:
     filename: ./models/yolov5s-leakyrelu.onnx
-    batch_sizes: [1]
+    batch_sizes: [1, 2, 4, 8]
     resolution: 640
-#   resnet18:
-#     filename: ./models/resnet18.onnx
-#     batch_sizes: [1, 2, 4]
-#     resolution: 224

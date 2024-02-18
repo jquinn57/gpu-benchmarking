@@ -9,12 +9,17 @@ import os
 import math
 import threading
 import queue
+from kasa_reader import KasaReader
 from memryx import AsyncAccl
 
 class MX3Benchmark():
     def __init__(self, settings):
         self.settings = settings
-        self.power_reader = None
+
+        self.kasa_reader = None
+        if 'kasa' in settings:
+            self.kasa_reader = KasaReader(*settings['kasa'])
+
         self.count = 0
         if 'image_path' in self.settings and self.settings['image_path']:
             self.load_images = True
@@ -42,6 +47,9 @@ class MX3Benchmark():
 
 
     def run_test(self, model_config):
+
+        if self.kasa_reader:
+            self.kasa_reader.start_reading()
         # Accelerate using the MemryX hardware
         dfp_filename = model_config['filename']
         self.resolution = model_config['resolution']
@@ -63,12 +71,24 @@ class MX3Benchmark():
         accl.wait() # wait for the accelerator to finish execution
         t1 = time.perf_counter()
 
-        fps = self.count / (t1 - t0)
-        inference_time_ms = 1000 * (t1 - t0) / self.count
+        if self.kasa_reader:
+            power_avg_kasa = int(round(self.kasa_reader.avg_recent_readings()))
+        else:
+            power_avg_kasa = 0
+
+        dt = t1 - t0
+        fps = self.count / dt
+        inference_time_ms = 1000 * dt  / self.count
         print(f'frame count: {self.count}')
         print(f'inference time ms: {inference_time_ms}')
         print(f'FPS: {fps}')
-        return fps, 0
+        print(f'Time per image: {dt} / {self.count} = {inference_time_ms} ms, FPS: {fps} , Power (System): {power_avg_kasa} W')
+        return fps, power_avg_kasa
+    
+    def shutdown(self):
+        if self.kasa_reader:
+            self.kasa_reader.stop_reading()
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -81,7 +101,7 @@ def main():
     pprint.pprint(config)
     mx3_benchmark = MX3Benchmark(config['settings'])
 
-    output = ['Model, Resolution, Batch Size, FPS, Power']
+    output = ['Model, Resolution, Batch Size, FPS, Power(System)']
     for model in config['models']:
         print()
         print(model)
@@ -91,6 +111,7 @@ def main():
         fps, power = mx3_benchmark.run_test(model_config)
         output.append(f'{model}, {res}, {batch_size}, {fps}, {power}')
     
+    mx3_benchmark.shutdown()
     with open(args.output_csv, 'wt') as fp:
         for line in output:
             fp.write(line + '\n')

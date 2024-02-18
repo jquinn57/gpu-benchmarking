@@ -25,16 +25,16 @@ class KasaReader:
         loop.run_forever()
     
     def start_reading(self):
-        print('Kasa thread starting')
         if not self.running:
+            print('Kasa thread starting')
             self.running = True
             self.thread.start()
             asyncio.run_coroutine_threadsafe(self.read_power(), self.loop)
 
     
     def stop_reading(self):
-        print('Kasa thread stoping')
         if self.running:
+            print('Kasa thread stoping')
             self.running = False
             self.loop.call_later(2 * self.dt_s, self.loop.stop)
             self.thread.join()

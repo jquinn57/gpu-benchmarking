@@ -16,7 +16,6 @@ from kasa_reader import KasaReader
 class GPUBenchmark():
     def __init__(self, settings):
         self.settings = settings
-        # TODO: add option to read power via nvidia-smi
         self.pmd_reader = None
         if 'pmd' in settings:
             self.pmd_reader = PMDReader(*settings['pmd'])
@@ -108,19 +107,23 @@ class GPUBenchmark():
         fps = int(round(count / dt))
 
         if self.pmd_reader:
-            self.pmd_reader.stop_reading()
             power_avg_pmd = int(round(self.pmd_reader.avg_recent_readings()))
         else:
             power_avg_pmd = 0
         
         if self.kasa_reader:
-            self.kasa_reader.stop_reading()
             power_avg_kasa = int(round(self.kasa_reader.avg_recent_readings()))
         else:
             power_avg_kasa = 0
         
-        print(f'Batch size: {batch_size}, Time per image: {dt} / {count} = {time_per_image} ms, FPS: {fps}, Power (PMD): {power_avg_pmd} W, Power (Kasa): {power_avg_kasa} W')
+        print(f'Batch size: {batch_size}, Time per image: {dt} / {count} = {time_per_image} ms, FPS: {fps}, Power (PCIe): {power_avg_pmd} W, Power (System): {power_avg_kasa} W')
         return fps, power_avg_pmd, power_avg_kasa
+
+    def shutdown(self):
+        if self.kasa_reader:
+            self.kasa_reader.stop_reading()
+        if self.pmd_reader:
+            self.pmd_reader.stop_reading()
 
 
 
@@ -135,16 +138,21 @@ def main():
     pprint.pprint(config)
     gpu_benchmark = GPUBenchmark(config['settings'])
 
-    output = ['Model, Resolution, Batch Size, FPS, Power(PMD), Power(Kasa)']
+    output = ['Model, Resolution, Batch Size, FPS, Power(PCIe), Power(System)']
     for model in config['models']:
         print()
         print(model)
         model_config = config['models'][model]
         res = model_config['resolution']
+
+        fps, power_pmd, power_kasa = gpu_benchmark.run_test(model_config, 1, do_inference=False)
+        output.append(f'{model}, {res}, {0}, {fps}, {power_pmd}, {power_kasa}')
+
         for batch_size in model_config['batch_sizes']:
             fps, power_pmd, power_kasa = gpu_benchmark.run_test(model_config, batch_size, do_inference=True)
             output.append(f'{model}, {res}, {batch_size}, {fps}, {power_pmd}, {power_kasa}')
-    
+    gpu_benchmark.shutdown()
+
     with open(args.output_csv, 'wt') as fp:
         for line in output:
             fp.write(line + '\n')

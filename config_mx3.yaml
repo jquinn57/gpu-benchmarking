@@ -1,7 +1,7 @@
 ---
 settings:
   num_images: 1000
-  power: None
+  kasa: ['192.168.1.87', 'workstation']
   #image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
   # resnet18:
