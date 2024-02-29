@@ -2,44 +2,37 @@
 settings:
   num_images: 1000
   kasa: ['192.168.1.87', 'workstation']
-  image_path: /home/jquinn/datasets/coco/images/val2017/
+  #image_path: /home/jquinn/datasets/coco/images/val2017/
+  post_processing: true
 models:
   yolov5n-LeakyReLU-416:
     filename: ./dfp_models/yolov5n-LeakyReLU-416.dfp
-    post_processing: ./dfp_models/model_0_yolov5n-LeakyReLU-416_post.onnx
     resolution: 416
 
   yolov5n-LeakyReLU-640:
     filename: ./dfp_models/yolov5n-LeakyReLU-640.dfp
-    post_processing: ./dfp_models/model_0_yolov5n-LeakyReLU-640_post.onnx
     resolution: 640
 
   yolov5n-SiLU-416:
     filename: ./dfp_models/yolov5n-SiLU-416.dfp
-    post_processing: ./dfp_models/model_0_yolov5n-SiLU-416_post.onnx
     resolution: 416
 
   yolov5n-SiLU-640:
     filename: ./dfp_models/yolov5n-SiLU-640.dfp
-    post_processing: ./dfp_models/model_0_yolov5n-SiLU-640_post.onnx
     resolution: 640
 
   yolov5s-LeakyReLU-416:
     filename: ./dfp_models/yolov5s-LeakyReLU-416.dfp
-    post_processing: ./dfp_models/model_0_yolov5s-LeakyReLU-416_post.onnx
     resolution: 416
 
   yolov5s-LeakyReLU-640:
     filename: ./dfp_models/yolov5s-LeakyReLU-640.dfp
-    post_processing: ./dfp_models/model_0_yolov5s-LeakyReLU-640_post.onnx
     resolution: 640
 
   yolov5s-SiLU-416:
     filename: ./dfp_models/yolov5s-SiLU-416.dfp
-    post_processing: ./dfp_models/model_0_yolov5s-SiLU-416_post.onnx
     resolution: 416
 
   yolov5s-SiLU-640:
     filename: ./dfp_models/yolov5s-SiLU-640.dfp
-    post_processing: ./dfp_models/model_0_yolov5s-SiLU-640_post.onnx
     resolution: 640

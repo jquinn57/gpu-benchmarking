@@ -16,6 +16,7 @@ from memryx import Benchmark
 class MX3Benchmark():
     def __init__(self, settings):
         self.settings = settings
+        self.do_post_processing = settings.get('post_processing', False)
 
         self.kasa_reader = None
         if 'kasa' in settings:
@@ -68,15 +69,14 @@ class MX3Benchmark():
 
         if self.kasa_reader:
             self.kasa_reader.start_reading()
-        # Accelerate using the MemryX hardware
         dfp_filename = model_config['filename']
         self.resolution = model_config['resolution']
         accl = AsyncAccl(dfp_filename, chip_gen=3.1)
-        #model_dir = os.path.dirname(dfp_filename)
-        #dfp_basename = os.path.basename(dfp_filename)
-        #onnx_filename = os.path.join(model_dir, 'model_0_' + dfp_basename.replace('.dfp', '_post.onnx'))
-        if 'post_processing' in model_config:
-            onnx_filename = model_config['post_processing']
+
+        if self.do_post_processing:
+            model_dir = os.path.dirname(dfp_filename)
+            dfp_basename = os.path.basename(dfp_filename)
+            onnx_filename = os.path.join(model_dir, 'model_0_' + dfp_basename.replace('.dfp', '_post.onnx'))
             if os.path.exists(onnx_filename):
                 print(f'Including post processing {onnx_filename}')
                 accl.set_postprocessing_model(onnx_filename)
@@ -131,7 +131,7 @@ def main():
     pprint.pprint(config)
     mx3_benchmark = MX3Benchmark(config['settings'])
 
-    outputs = ['Model, Resolution, Batch Size, FPS, Latency(ms), PCIe Power, System Power']
+    outputs = ['Model, Resolution, Batch Size, FPS, Latency(ms), FPS (bm), System Power']
 
     for model in config['models']:
         print()
@@ -139,16 +139,17 @@ def main():
         model_config = config['models'][model]
         res = model_config['resolution']
         batch_size = 1
-        baseline_power = mx3_benchmark.baseline_power_test(model_config)
-        outputs.append(f"{model}, {res}, {0}, {0}, {0}, {0}, {baseline_power}")
-
-        print(f'Baseline power: {baseline_power}')
+        #baseline_power = mx3_benchmark.baseline_power_test(model_config)
+        #outputs.append(f"{model}, {res}, {0}, {0}, {0}, {0}, {baseline_power}")
+        #print(f'Baseline power: {baseline_power}')
         data = mx3_benchmark.run_test(model_config)
         
         # Do a seperate latency measurement
         with Benchmark(dfp=model_config['filename'], verbose=2, chip_gen=3.1) as bm:
-           _, data['latency_ms'], _ = bm.run(threading=False)
-        outputs.append(f"{model}, {res}, {batch_size}, {data['fps']}, {data['latency_ms']}, {data['pcie_power']}, {data['system_power']}")
+          _, data['latency_ms'], _ = bm.run(threading=False)
+          _, _, fps_bm = bm.run(frames=1000)
+
+        outputs.append(f"{model}, {res}, {batch_size}, {data['fps']}, {data['latency_ms']}, {fps_bm}, {data['system_power']}")
     
     mx3_benchmark.shutdown()
     with open(args.output_csv, 'wt') as fp:
