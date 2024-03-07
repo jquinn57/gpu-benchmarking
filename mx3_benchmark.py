@@ -7,12 +7,11 @@ import numpy as np
 import cv2
 import glob
 import os
-import math
-import threading
-import queue
 from kasa_reader import KasaReader
 from memryx import AsyncAccl
 from memryx import Benchmark
+
+
 
 class MX3Benchmark():
     def __init__(self, settings):
@@ -33,12 +32,22 @@ class MX3Benchmark():
              self.image_list = []
              self.num_images = self.settings['num_images']
 
+    @staticmethod
+    def crop_or_pad(img, target_shape):
+        pad_y = max(target_shape[0] - img.shape[0], 0)
+        pad_x = max(target_shape[1] - img.shape[1], 0)
+        img = np.pad(img, ((0, pad_y), (0, pad_x), (0, 0)))
+        img = img[:target_shape[0], :target_shape[1], :]
+        return img
+
+
 
     def data_source(self):
         if self.load_images:
             for img_filename in self.image_list[:self.num_images]:
                 img = cv2.imread(img_filename)
-                img = cv2.resize(img, (self.resolution, self.resolution)).astype(np.float32)
+                #img = cv2.resize(img, (self.resolution, self.resolution)).astype(np.float32)  / 255.0
+                img = self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(np.float32) / 255.0
                 yield img
         else:
             for n in range(self.num_images):
