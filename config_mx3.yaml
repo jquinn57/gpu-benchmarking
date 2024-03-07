@@ -2,8 +2,8 @@
 settings:
   num_images: 1000
   kasa: ['192.168.1.87', 'workstation']
-  #image_path: /home/jquinn/datasets/coco/images/val2017/
-  post_processing: true
+  image_path: /home/jquinn/datasets/coco/images/val2017/
+  post_processing: false
 models:
   yolov5n-LeakyReLU-416:
     filename: ./dfp_models/yolov5n-LeakyReLU-416.dfp

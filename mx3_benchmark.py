@@ -1,3 +1,4 @@
+# source ~/mx3-env/bin/activate
 import yaml
 import argparse
 import pprint

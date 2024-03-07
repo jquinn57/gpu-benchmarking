@@ -1,3 +1,4 @@
+# source ~/onnx-env/bin/activate
 import yaml
 import argparse
 import pprint
@@ -29,6 +30,12 @@ class GPUBenchmark():
 
             
     def image_worker(self, res):
+        # empty out the queue if there were some leftovers from previous run
+        # which don't fit evenly into a batch
+        while not self.image_q.empty():
+            img = self.image_q.get()
+        print('starting image_worker thread')
+        print(f'resolution: {res}')      
         n = 0
         while self.running and n < self.num_images:
             img_filename = self.image_list[n]
@@ -87,7 +94,8 @@ class GPUBenchmark():
             if self.load_images:
                 img_batch = np.zeros((batch_size, 3, res, res), dtype=np.float32)
                 for i in range(batch_size):
-                    img_batch[i, :, :, :] = self.image_q.get()
+                    img_new = self.image_q.get()
+                    img_batch[i, :, :, :] = img_new
             else:
                 img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
             
@@ -130,6 +138,11 @@ class GPUBenchmark():
         output['total_time_s'] = dt
         output['latency_ms'] = latency_ms
         pprint.pprint(output)
+
+        # wait for worker thread to finish before moving on
+        self.running = False
+        self.thread.join()
+
         return output
 
     def shutdown(self):
@@ -158,12 +171,13 @@ def main():
         model_config = config['models'][model]
         res = model_config['resolution']
 
-        data = gpu_benchmark.run_test(model_config, 1, do_inference=False)
-        outputs.append(f"{model}, {res}, {0}, {0}, {0}, {data['pcie_power']}, {data['system_power']}")
+        #data = gpu_benchmark.run_test(model_config, 1, do_inference=False)
+        #outputs.append(f"{model}, {res}, {0}, {0}, {0}, {data['pcie_power']}, {data['system_power']}")
 
         for batch_size in model_config['batch_sizes']:
             data = gpu_benchmark.run_test(model_config, batch_size, do_inference=True)
             outputs.append(f"{model}, {res}, {batch_size}, {data['fps']}, {data['latency_ms']}, {data['pcie_power']}, {data['system_power']}")
+    
     gpu_benchmark.shutdown()
 
     with open(args.output_csv, 'wt') as fp:
