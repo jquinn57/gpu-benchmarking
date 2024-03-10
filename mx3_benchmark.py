@@ -7,16 +7,22 @@ import numpy as np
 import cv2
 import glob
 import os
+import multiprocessing
+import onnxruntime
 from kasa_reader import KasaReader
 from memryx import AsyncAccl
 from memryx import Benchmark
-
+import logging
+logging.basicConfig(level=logging.INFO) 
 
 
 class MX3Benchmark():
     def __init__(self, settings):
         self.settings = settings
         self.do_post_processing = settings.get('post_processing', False)
+        self.img_queue = multiprocessing.Queue()
+        self.output_queue = multiprocessing.Queue()
+        self.post_processor_onnx = None
 
         self.kasa_reader = None
         if 'kasa' in settings:
@@ -41,25 +47,53 @@ class MX3Benchmark():
         return img
 
 
-
-    def data_source(self):
+    def image_preprocessor(self):
+        
         if self.load_images:
             for img_filename in self.image_list[:self.num_images]:
                 img = cv2.imread(img_filename)
-                #img = cv2.resize(img, (self.resolution, self.resolution)).astype(np.float32)  / 255.0
+                #img = cv2.resize(img, (self.resolution, self.resolution),interpolation=cv2.INTER_LINEAR).astype(np.float32)  / 255.0
                 img = self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(np.float32) / 255.0
-                yield img
+                self.img_queue.put(img)
         else:
             for n in range(self.num_images):
                 # img = np.random.random((self.resolution, self.resolution, 3)).astype(np.float32)
                 # On Yolov5s-leakyrelu-640x640 using zeros: FPS = 100 
                 # using random data FPS=80 -- surpisingly makes a big difference even though this runs in a seperate thread
                 img = np.zeros((self.resolution, self.resolution, 3), dtype=np.float32)
-                yield img
-        
-    def output_processor(self, *outputs):
-        self.count += 1
+                self.img_queue.put(img)
+        print('Preprocessor done')
 
+
+    def postprocessor(self):
+        count = 0
+        while count < self.num_images:
+            fmap_dict = self.output_queue.get()
+            if self.post_processor_onnx is not None:
+                output = self.post_processor_onnx.run(None, fmap_dict)[0]
+                #print(f'{count} {output.shape}')
+            count += 1
+        print('Postprocessor done')
+
+
+    def data_source(self):
+        count = 0
+        while count < self.num_images:
+            yield self.img_queue.get()
+            count += 1
+
+    def output_processor(self, *outputs):
+       
+        input_dict = {}
+        for i, output in enumerate(outputs):
+            if self.post_processor_onnx is not None:
+                name = self.post_processor_onnx.get_inputs()[i].name
+            else:
+                name = str(i)
+            input_dict[name] = np.moveaxis(output[None, :, :, :], -1, 1)
+        self.output_queue.put(input_dict)
+        #print(f'output: {post_output.shape}')
+        self.count += 1
 
     def baseline_power_test(self, model_config):
         dfp_filename = model_config['filename']
@@ -89,7 +123,7 @@ class MX3Benchmark():
             onnx_filename = os.path.join(model_dir, 'model_0_' + dfp_basename.replace('.dfp', '_post.onnx'))
             if os.path.exists(onnx_filename):
                 print(f'Including post processing {onnx_filename}')
-                accl.set_postprocessing_model(onnx_filename)
+                self.post_processor_onnx = onnxruntime.InferenceSession(onnx_filename, providers=['CPUExecutionProvider'])
 
         accl.connect_input(self.data_source) # starts asynchronous execution of input generating callback
         accl.connect_output(self.output_processor) # starts asynchronous execution of output processing callback
@@ -97,7 +131,14 @@ class MX3Benchmark():
         self.count = 0
         print(f'Start test of {dfp_filename}')
         t0 = time.perf_counter()
+        preprocessor = multiprocessing.Process(target=self.image_preprocessor)
+        preprocessor.start()
+        postprocessor = multiprocessing.Process(target=self.postprocessor)
+        postprocessor.start()
         accl.wait() # wait for the accelerator to finish execution
+        print('Accl finished')
+        preprocessor.join()
+        postprocessor.join()
         t1 = time.perf_counter()
         # undocumented method?
         accl.shutdown()
@@ -115,7 +156,7 @@ class MX3Benchmark():
         output = {}
         output['batch_size'] = 1
         output['inference_time_ms'] = inference_time_ms
-        output['fps'] = fps
+        output['fps'] = int(round(fps))
         output['system_power'] = power_avg_kasa
         output['pcie_power'] = 0
         output['count'] = self.count
@@ -156,14 +197,16 @@ def main():
         
         # Do a seperate latency measurement
         with Benchmark(dfp=model_config['filename'], verbose=2, chip_gen=3.1) as bm:
-          _, data['latency_ms'], _ = bm.run(threading=False)
-          _, _, fps_bm = bm.run(frames=1000)
-
+            _, data['latency_ms'], _ = bm.run(threading=False)
+            _, _, fps_bm = bm.run(frames=1000)
+            fps_bm = int(round(fps_bm))
+        
         outputs.append(f"{model}, {res}, {batch_size}, {data['fps']}, {data['latency_ms']}, {fps_bm}, {data['system_power']}")
     
     mx3_benchmark.shutdown()
     with open(args.output_csv, 'wt') as fp:
         for line in outputs:
+            print(line)
             fp.write(line + '\n')
 
 
