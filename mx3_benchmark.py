@@ -23,6 +23,7 @@ class MX3Benchmark():
         self.img_queue = multiprocessing.Queue()
         self.output_queue = multiprocessing.Queue()
         self.post_processor_onnx = None
+        self.input_names = None
 
         self.kasa_reader = None
         if 'kasa' in settings:
@@ -33,7 +34,7 @@ class MX3Benchmark():
             self.load_images = True
             self.image_list = glob.glob(self.settings['image_path'] + '/*.jpg')
             self.num_images = min(len(self.image_list), self.settings['num_images'])
-        else: # use random data instead of actual images
+        else: # use zeros instead of actual images
              self.load_images = False
              self.image_list = []
              self.num_images = self.settings['num_images']
@@ -52,8 +53,8 @@ class MX3Benchmark():
         if self.load_images:
             for img_filename in self.image_list[:self.num_images]:
                 img = cv2.imread(img_filename)
-                #img = cv2.resize(img, (self.resolution, self.resolution),interpolation=cv2.INTER_LINEAR).astype(np.float32)  / 255.0
-                img = self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(np.float32) / 255.0
+                img = cv2.resize(img, (self.resolution, self.resolution),interpolation=cv2.INTER_LINEAR).astype(np.float32)  / 255.0
+                #img = self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(np.float32) / 255.0
                 self.img_queue.put(img)
         else:
             for n in range(self.num_images):
@@ -86,10 +87,7 @@ class MX3Benchmark():
        
         input_dict = {}
         for i, output in enumerate(outputs):
-            if self.post_processor_onnx is not None:
-                name = self.post_processor_onnx.get_inputs()[i].name
-            else:
-                name = str(i)
+            name = self.input_names[i]
             input_dict[name] = np.moveaxis(output[None, :, :, :], -1, 1)
         self.output_queue.put(input_dict)
         #print(f'output: {post_output.shape}')
@@ -117,6 +115,7 @@ class MX3Benchmark():
         self.resolution = model_config['resolution']
         accl = AsyncAccl(dfp_filename, chip_gen=3.1)
 
+        self.input_names = ['0', '1', '2']
         if self.do_post_processing:
             model_dir = os.path.dirname(dfp_filename)
             dfp_basename = os.path.basename(dfp_filename)
@@ -124,6 +123,8 @@ class MX3Benchmark():
             if os.path.exists(onnx_filename):
                 print(f'Including post processing {onnx_filename}')
                 self.post_processor_onnx = onnxruntime.InferenceSession(onnx_filename, providers=['CPUExecutionProvider'])
+                self.input_names = [c.name for c in self.post_processor_onnx.get_inputs()]
+            
 
         accl.connect_input(self.data_source) # starts asynchronous execution of input generating callback
         accl.connect_output(self.output_processor) # starts asynchronous execution of output processing callback
