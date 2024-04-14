@@ -27,7 +27,6 @@ models:
     resolution: 640
     batch_sizes: [1, 2, 4, 8, 16]
 
-
   yolov5s-LeakyReLU-416:
     filename: ./onnx_models/yolov5s-LeakyReLU-dynamic.onnx
     resolution: 416
@@ -45,5 +44,56 @@ models:
 
   yolov5s-SiLU-640:
     filename: ./onnx_models/yolov5s-SiLU-dynamic.onnx
+    resolution: 640
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov7-tiny-416:
+    filename: ./onnx_models/yolov7-tiny-416-dynamic.onnx
+    resolution: 416
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov7-tiny-640:
+    filename: ./onnx_models/yolov7-tiny-640-dynamic.onnx
+    resolution: 640
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov8n-416:
+    filename: ./onnx_models/yolov8n-dynamic.onnx
+    resolution: 416
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov8s-416:
+    filename: ./onnx_models/yolov8s-dynamic.onnx
+    resolution: 416
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov8m-416:
+    filename: ./onnx_models/yolov8m-dynamic.onnx
+    resolution: 416
+    batch_sizes: [1, 2, 4, 8, 16]
+
+
+  yolov8n-640:
+    filename: ./onnx_models/yolov8n-dynamic.onnx
+    resolution: 640
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov8s-640:
+    filename: ./onnx_models/yolov8s-dynamic.onnx
+    resolution: 640
+    batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov8m-640:
+    filename: ./onnx_models/yolov8m-dynamic.onnx
+    resolution: 640
+   batch_sizes: [1, 2, 4, 8, 16]
+
+  yolov9c-416:
+    filename: ./onnx_models/yolov9c-dynamic.onnx
+    resolution: 416
+    batch_sizes: [1, 2, 4, 8, 16]
+  
+  yolov9c-640:
+    filename: ./onnx_models/yolov9c-dynamic.onnx
     resolution: 640
     batch_sizes: [1, 2, 4, 8, 16]
