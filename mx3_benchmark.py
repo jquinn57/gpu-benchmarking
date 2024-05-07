@@ -59,13 +59,8 @@ class MX3Benchmark:
                 img = cv2.imread(img_filename)
                 t0 = time.perf_counter()
                 # either option (resize or crop/pad) takes about 1 ms.  Why is the FPS dramatically lower with resize?
-                # img = cv2.resize(img, (self.resolution, self.resolution), interpolation=cv2.INTER_LINEAR).astype(np.float32) / 255.0
-                img = (
-                    self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(
-                        np.float32
-                    )
-                    / 255.0
-                )
+                img = cv2.resize(img, (self.resolution, self.resolution), interpolation=cv2.INTER_LINEAR).astype(np.float32) / 255.0
+                #img = self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(np.float32) / 255.0
                 dt = time.perf_counter() - t0
                 dt_tot += dt
                 self.img_queue.put(img)
@@ -137,9 +132,7 @@ class MX3Benchmark:
                 self.post_processor_onnx = onnxruntime.InferenceSession(
                     onnx_filename, providers=["CPUExecutionProvider"]
                 )
-                self.input_names = [
-                    c.name for c in self.post_processor_onnx.get_inputs()
-                ]
+                self.input_names = [c.name for c in self.post_processor_onnx.get_inputs()]
             else:
                 raise Exception(f"{onnx_filename} not found")
 
@@ -148,6 +141,7 @@ class MX3Benchmark:
         preprocessor = threading.Thread(target=self.image_preprocessor)
         preprocessor.start()
 
+        preprocessor.join()
         t0 = time.perf_counter()
 
         accl.connect_input(self.data_source)
@@ -159,7 +153,6 @@ class MX3Benchmark:
         accl.wait()  # wait for the accelerator to finish execution
         print("Accl finished")
         postprocessor.join()
-        preprocessor.join()
 
         t1 = time.perf_counter()
         # undocumented method?
@@ -194,12 +187,8 @@ class MX3Benchmark:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config", help="Path to config yaml", default="config_mx3.yaml"
-    )
-    parser.add_argument(
-        "--output_csv", help="Path to output csv", default="output_mx3.csv"
-    )
+    parser.add_argument("--config", help="Path to config yaml", default="config_mx3.yaml")
+    parser.add_argument("--output_csv", help="Path to output csv", default="output_mx3.csv")
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -207,9 +196,8 @@ def main():
     pprint.pprint(config)
     mx3_benchmark = MX3Benchmark(config["settings"])
 
-    outputs = [
-        "Model, Resolution, Batch Size,  Latency(ms), FPS, FPS (mx_bench), System Power"
-    ]
+    outputs = ["Model, Resolution, Batch Size,  Latency(ms), FPS, FPS (mx_bench), System Power"]
+    num_images = int(config['settings']['num_images'])
 
     for model in config["models"]:
         print()
@@ -221,12 +209,16 @@ def main():
         # outputs.append(f"{model}, {res}, {0}, {0}, {0}, {0}, {baseline_power}")
         # print(f'Baseline power: {baseline_power}')
         data = mx3_benchmark.run_test(model_config)
+        time.sleep(1)
 
         # Do a seperate latency measurement
-        with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-            _, data["latency_ms"], _ = bm.run(threading=False)
-            _, _, fps_bm = bm.run(frames=1000)
-            fps_bm = int(round(fps_bm))
+        # with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+        #     _, data["latency_ms"], _ = bm.run(threading=False)
+        #     _, _, fps_bm = bm.run(frames=num_images)
+        #     fps_bm = int(round(fps_bm))
+
+        fps_bm = 0 
+        time.sleep(1)
 
         outputs.append(
             f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}"
