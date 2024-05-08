@@ -14,16 +14,22 @@ def main():
     pprint.pprint(config)
 
     fps_all = {}
-    for n in range(10):
+    for n in range(4):
         print()
         for model in config["models"]:
             model_config = config["models"][model]
 
             # Do a seperate latency measurement
+            # if this is done within the same "with" context as FPS measurement
+            # the FPS will occsionally drop
+            #with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+            #    _, latency_ms, _ = bm.run(threading=False)
+
             with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-                #_, data["latency_ms"], _ = bm.run(threading=False)
-                _, _, fps_bm = bm.run(frames=1000)
+                _, _, fps_bm = bm.run(frames=1000, threading=True)
                 fps_bm = int(round(fps_bm))
+
+
 
             if model in fps_all:
                 fps_all[model].append(fps_bm)

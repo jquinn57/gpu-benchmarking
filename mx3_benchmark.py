@@ -53,12 +53,12 @@ class MX3Benchmark:
 
     def image_preprocessor(self):
 
+        print(f'starting image_preprocessing, img_queue size: {self.img_queue.qsize()}')
         dt_tot = 0
         if self.load_images:
             for img_filename in self.image_list[: self.num_images]:
                 img = cv2.imread(img_filename)
                 t0 = time.perf_counter()
-                # either option (resize or crop/pad) takes about 1 ms.  Why is the FPS dramatically lower with resize?
                 img = cv2.resize(img, (self.resolution, self.resolution), interpolation=cv2.INTER_LINEAR).astype(np.float32) / 255.0
                 #img = self.crop_or_pad(img, (self.resolution, self.resolution, 3)).astype(np.float32) / 255.0
                 dt = time.perf_counter() - t0
@@ -139,9 +139,12 @@ class MX3Benchmark:
         self.count = 0
         print(f"Start test of {dfp_filename}")
         preprocessor = threading.Thread(target=self.image_preprocessor)
+        t0_pre = time.perf_counter()
         preprocessor.start()
 
-        preprocessor.join()
+        t1_pre = time.perf_counter()
+        dt_pre_ms = 1000*(t1_pre - t0_pre)
+        print(f'Pre-processing done, starting timer, time: {dt_pre_ms} ms')
         t0 = time.perf_counter()
 
         accl.connect_input(self.data_source)
@@ -153,6 +156,7 @@ class MX3Benchmark:
         accl.wait()  # wait for the accelerator to finish execution
         print("Accl finished")
         postprocessor.join()
+        preprocessor.join()
 
         t1 = time.perf_counter()
         # undocumented method?
@@ -205,21 +209,20 @@ def main():
         model_config = config["models"][model]
         res = model_config["resolution"]
         batch_size = 1
-        # baseline_power = mx3_benchmark.baseline_power_test(model_config)
-        # outputs.append(f"{model}, {res}, {0}, {0}, {0}, {0}, {baseline_power}")
-        # print(f'Baseline power: {baseline_power}')
+
+        # doing the Benchmark tests before the run_test call changes the results
+        # Do a seperate latency measurement
+        with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+            _, latency_ms, _ = bm.run(threading=False)
+        with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+            _, _, fps_bm = bm.run(frames=num_images)
+            fps_bm = int(round(fps_bm))
+
+        time.sleep(1)
         data = mx3_benchmark.run_test(model_config)
         time.sleep(1)
 
-        # Do a seperate latency measurement
-        # with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-        #     _, data["latency_ms"], _ = bm.run(threading=False)
-        #     _, _, fps_bm = bm.run(frames=num_images)
-        #     fps_bm = int(round(fps_bm))
-
-        fps_bm = 0 
-        time.sleep(1)
-
+        data["latency_ms"] = latency_ms
         outputs.append(
             f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}"
         )
