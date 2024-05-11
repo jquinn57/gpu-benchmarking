@@ -118,7 +118,9 @@ class MX3Benchmark:
             self.kasa_reader.start_reading()
         dfp_filename = model_config["filename"]
         self.resolution = model_config["resolution"]
+        print('asyncaccl pre')
         accl = AsyncAccl(dfp_filename, chip_gen=3.1)
+        print('asyncaccl post')
 
         self.input_names = ["0", "1", "2"]
         if self.do_post_processing:
@@ -142,9 +144,9 @@ class MX3Benchmark:
         t0_pre = time.perf_counter()
         preprocessor.start()
 
-        t1_pre = time.perf_counter()
-        dt_pre_ms = 1000*(t1_pre - t0_pre)
-        print(f'Pre-processing done, starting timer, time: {dt_pre_ms} ms')
+        #t1_pre = time.perf_counter()
+        #dt_pre_ms = 1000*(t1_pre - t0_pre)
+        #print(f'Pre-processing done, starting timer, time: {dt_pre_ms} ms')
         t0 = time.perf_counter()
 
         accl.connect_input(self.data_source)
@@ -160,7 +162,8 @@ class MX3Benchmark:
 
         t1 = time.perf_counter()
         # undocumented method?
-        accl.shutdown()
+        accl.stop()
+        #accl.shutdown()
         print("Done")
 
         if self.kasa_reader:
@@ -221,6 +224,7 @@ def main():
         time.sleep(1)
         data = mx3_benchmark.run_test(model_config)
         time.sleep(1)
+
 
         data["latency_ms"] = latency_ms
         outputs.append(
