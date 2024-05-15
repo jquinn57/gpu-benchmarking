@@ -148,6 +148,7 @@ class MX3Benchmark:
         #dt_pre_ms = 1000*(t1_pre - t0_pre)
         #print(f'Pre-processing done, starting timer, time: {dt_pre_ms} ms')
         t0 = time.perf_counter()
+        preprocessor.join()
 
         accl.connect_input(self.data_source)
         accl.connect_output(self.output_processor)
@@ -158,12 +159,11 @@ class MX3Benchmark:
         accl.wait()  # wait for the accelerator to finish execution
         print("Accl finished")
         postprocessor.join()
-        preprocessor.join()
 
         t1 = time.perf_counter()
         # undocumented method?
         accl.stop()
-        #accl.shutdown()
+        accl.shutdown()
         print("Done")
 
         if self.kasa_reader:
@@ -196,6 +196,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", help="Path to config yaml", default="config_mx3.yaml")
     parser.add_argument("--output_csv", help="Path to output csv", default="output_mx3.csv")
+    parser.add_argument('--niters', type=int, default=1)
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -207,29 +208,35 @@ def main():
     num_images = int(config['settings']['num_images'])
 
     for model in config["models"]:
-        print()
-        print(model)
-        model_config = config["models"][model]
-        res = model_config["resolution"]
-        batch_size = 1
+        
+        for n in range(args.niters):
+            time.sleep(2)
+            print()
+            print(model)
 
-        # doing the Benchmark tests before the run_test call changes the results
-        # Do a seperate latency measurement
-        with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-            _, latency_ms, _ = bm.run(threading=False)
-        with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-            _, _, fps_bm = bm.run(frames=num_images)
-            fps_bm = int(round(fps_bm))
+            model_config = config["models"][model]
+            res = model_config["resolution"]
+            batch_size = 1
 
-        time.sleep(1)
-        data = mx3_benchmark.run_test(model_config)
-        time.sleep(1)
+            # doing the Benchmark tests before the run_test call changes the results
+            # Do a seperate latency measurement
+            with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+                _, latency_ms, _ = bm.run(threading=False)
+            with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+                _, _, fps_bm = bm.run(frames=num_images)
+                fps_bm = int(round(fps_bm))
+            # latency_ms = 0
+            # fps_bm = 0
+
+            time.sleep(1)
+            data = mx3_benchmark.run_test(model_config)
+            time.sleep(1)
 
 
-        data["latency_ms"] = latency_ms
-        outputs.append(
-            f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}"
-        )
+            data["latency_ms"] = latency_ms
+            outputs.append(
+                f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}"
+            )
 
     mx3_benchmark.shutdown()
     with open(args.output_csv, "wt") as fp:
