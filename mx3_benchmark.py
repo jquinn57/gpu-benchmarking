@@ -1,4 +1,3 @@
-# source ~/mx3-env/bin/activate
 import yaml
 import argparse
 import pprint
@@ -8,11 +7,10 @@ import cv2
 import glob
 import os
 
-# import multiprocessing
 import threading
 from queue import Queue
 import onnxruntime
-from kasa_reader import KasaReader
+# from kasa_reader import KasaReader
 from memryx import AsyncAccl
 from memryx import Benchmark
 import logging
@@ -67,6 +65,7 @@ class MX3Benchmark:
         else:
             for n in range(self.num_images):
                 img = np.zeros((self.resolution, self.resolution, 3), dtype=np.float32)
+                #img = np.random.random((self.resolution, self.resolution, 3)).astype(np.float32)
                 self.img_queue.put(img)
         dt_avg = dt_tot / self.num_images
         print(f"Preprocessor done, dt_avg = {dt_avg}")
@@ -118,9 +117,7 @@ class MX3Benchmark:
             self.kasa_reader.start_reading()
         dfp_filename = model_config["filename"]
         self.resolution = model_config["resolution"]
-        print('asyncaccl pre')
         accl = AsyncAccl(dfp_filename, chip_gen=3.1)
-        print('asyncaccl post')
 
         self.input_names = ["0", "1", "2"]
         if self.do_post_processing:
@@ -141,14 +138,9 @@ class MX3Benchmark:
         self.count = 0
         print(f"Start test of {dfp_filename}")
         preprocessor = threading.Thread(target=self.image_preprocessor)
-        t0_pre = time.perf_counter()
-        preprocessor.start()
 
-        #t1_pre = time.perf_counter()
-        #dt_pre_ms = 1000*(t1_pre - t0_pre)
-        #print(f'Pre-processing done, starting timer, time: {dt_pre_ms} ms')
         t0 = time.perf_counter()
-        preprocessor.join()
+        preprocessor.start()
 
         accl.connect_input(self.data_source)
         accl.connect_output(self.output_processor)
@@ -156,13 +148,14 @@ class MX3Benchmark:
         postprocessor = threading.Thread(target=self.postprocessor)
         postprocessor.start()
 
-        accl.wait()  # wait for the accelerator to finish execution
+        accl.wait()
         print("Accl finished")
         postprocessor.join()
+        preprocessor.join()
 
         t1 = time.perf_counter()
-        # undocumented method?
         accl.stop()
+        # undocumented method shutdown seems to be needed when using Benchmark and AsyncAccl together
         accl.shutdown()
         print("Done")
 
@@ -197,6 +190,7 @@ def main():
     parser.add_argument("--config", help="Path to config yaml", default="config_mx3.yaml")
     parser.add_argument("--output_csv", help="Path to output csv", default="output_mx3.csv")
     parser.add_argument('--niters', type=int, default=1)
+    parser.add_argument('--skip_benchmark', action='store_true', help='Optionally skip using Benchmark API')
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -219,14 +213,16 @@ def main():
             batch_size = 1
 
             # doing the Benchmark tests before the run_test call changes the results
-            # Do a seperate latency measurement
-            with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-                _, latency_ms, _ = bm.run(threading=False)
-            with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
-                _, _, fps_bm = bm.run(frames=num_images)
-                fps_bm = int(round(fps_bm))
-            # latency_ms = 0
-            # fps_bm = 0
+            # use Benchmark for a seperate FPS and latency measurement
+            if not args.skip_benchmark:
+                with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+                    _, latency_ms, _ = bm.run(threading=False)
+                with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
+                    _, _, fps_bm = bm.run(frames=num_images)
+                    fps_bm = int(round(fps_bm))
+            else:
+                latency_ms = 0
+                fps_bm = 0
 
             time.sleep(1)
             data = mx3_benchmark.run_test(model_config)
@@ -234,9 +230,7 @@ def main():
 
 
             data["latency_ms"] = latency_ms
-            outputs.append(
-                f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}"
-            )
+            outputs.append(f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}")
 
     mx3_benchmark.shutdown()
     with open(args.output_csv, "wt") as fp:
