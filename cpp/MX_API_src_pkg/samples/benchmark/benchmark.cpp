@@ -228,7 +228,7 @@ void run_inference(bool do_pre_load){
 
         if(do_pre_load){
             // finish all the loading/preprocessing before starting accl
-            // this method is consistent at 41 FPS
+            // this method is consistent at 120 FPS
             loading_thread.join();
             accl.start();
         }
