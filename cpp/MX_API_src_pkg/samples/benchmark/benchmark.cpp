@@ -20,7 +20,9 @@ namespace fs = std::filesystem;
 
 std::atomic_bool runflag;
 
+//fs::path model_path = "cascadePlus/yolov5s-SiLU-640.dfp";
 fs::path model_path = "cascadePlus/yolov5n-SiLU-640.dfp";
+
 fs::path image_path = "/home/jquinn/datasets/coco/images/val2017"; 
 std::vector<fs::path> image_list;
 
@@ -116,7 +118,7 @@ void load_images(){
             frames_queue.push_back(preProcframe);
         }
         // notify the waiting thread that there are frames
-        //cond_var.notify_one();
+        cond_var.notify_one();
 
         // std::cout << image_path.string() << std::endl;
     }
@@ -228,13 +230,14 @@ void run_inference(bool do_pre_load){
 
         if(do_pre_load){
             // finish all the loading/preprocessing before starting accl
-            // this method is consistent at 120 FPS
+            // this method is consistent at 120 FPS for both yolov5s-SiLU-640 and yolov5n-SiLU-640
             loading_thread.join();
             accl.start();
         }
         else{
             // start accl right away, do loading/preprocessing concurrently
-            // this method is sometimes a little faster (173 FPS) and sometimes much slower (41 FPS) than pre_load method 
+            // for yolov5n-SiLU-640 sometimes we get 173 FPS and sometimes 41 FPS
+            // for yolov5s-SiLU-640 we consistently get 170 FPS
             accl.start();
             loading_thread.join();
         }
@@ -290,9 +293,8 @@ int main(int argc, char* argv[]){
         std::cout << "application start \n";
         std::cout << "model path = " << model_path.c_str() << "\n";
 
-        //only_load_images();
-
-        run_inference(true);
+        bool do_pre_load = false;
+        run_inference(do_pre_load);
 
     }
 
