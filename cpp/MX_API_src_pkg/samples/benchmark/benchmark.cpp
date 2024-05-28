@@ -4,9 +4,6 @@
 #include <opencv2/opencv.hpp>    /* imshow */
 #include <opencv2/imgproc.hpp>   /* cvtcolor */
 #include <opencv2/imgcodecs.hpp> /* imwrite */
-#include <onnxruntime_cxx_api.h>
-#include <cpu_provider_factory.h>
-#include <provider_options.h>
 #include <fstream>
 #include <chrono>
 #include <ctime>
@@ -14,16 +11,19 @@
 #include <condition_variable>
 #include <mutex>
 #include "MxAccl.h"
+#include "post_processor.h"
 
 
 namespace fs = std::filesystem;
 
 std::atomic_bool runflag;
 
-//fs::path model_path = "cascadePlus/yolov5s-SiLU-640.dfp";
-fs::path model_path = "cascadePlus/yolov5n-SiLU-640.dfp";
+fs::path model_path = "cascadePlus/yolov5s-SiLU-640.dfp";
+fs::path onnx_model_path = "model_0_yolov5s-SiLU-640_post.onnx";
 
 fs::path image_path = "/home/jquinn/datasets/coco/images/val2017"; 
+const char* const output_node_names[] = {"output0"};
+
 std::vector<fs::path> image_list;
 
 
@@ -31,32 +31,12 @@ std::vector<fs::path> image_list;
 MX::Types::MxModelInfo model_info;
 
 
-struct detectedObj {
-    int x1;
-    int x2;
-    int y1;
-    int y2;
-    int obj_id;
-    float accuracy;
-
-    detectedObj(int x1_, int x2_, int y1_, int y2_, int obj_id_, float accuracy_) {
-       x1 = x1_;
-       x2 = x2_;
-       y1 = y1_;
-       y2 = y2_;
-       obj_id = obj_id_;
-       accuracy = accuracy_;
-   }
-} ;
-
-
-
 //Queue to add input frames
 std::deque<cv::Mat> frames_queue;
 std::mutex frame_queue_lock;
 //Queue to add output from mxa
-std::deque<std::vector<float*>> ofmap_queue;
-std::mutex ofmap_queue_lock;
+//std::deque<std::vector<float*>> ofmap_queue;
+//std::mutex ofmap_queue_lock;
 std::condition_variable cond_var;
 
 
@@ -73,26 +53,66 @@ int model_height_after_padding = 640;
 double origHeight = 0.0;
 double origWidth = 0.0;
 
-// Class names for YOLOv7
-std::vector<std::string> class_names = {
-    "person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat",
-    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
-    "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
-    "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
-    "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
-    "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
-    "sofa", "potted plant", "bed", "dining table", "toilet", "tv monitor", "laptop", "mouse",
-    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator",
-    "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-};
+
+Ort::MemoryInfo PostProcessor::s_memoryInfo =  Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+
+PostProcessor::PostProcessor(const std::filesystem::path &model_path)
+{
+    std::cout << "Loading model: " << model_path.string() << std::endl;
+    // Onnx Threading option to limit CPU usage
+    // OrtEnv* environment;
+    // OrtThreadingOptions* envOpts = nullptr;
+    //Ort::GetApi().CreateThreadingOptions(&envOpts);
+    //Ort::GetApi().SetGlobalIntraOpNumThreads(envOpts, 2);
+    //Ort::GetApi().SetGlobalInterOpNumThreads(envOpts, 2);
+    //Ort::GetApi().SetGlobalSpinControl(envOpts, 0);
+    //Ort::GetApi().CreateEnvWithGlobalThreadPools(ORT_LOGGING_LEVEL_WARNING, "objectDetectionSample", envOpts, &environment);
+    
+    m_env = Ort::Env(ORT_LOGGING_LEVEL_VERBOSE, "post-processing");
+    m_session_options.SetIntraOpNumThreads(2);
+    m_session_options.SetInterOpNumThreads(2);
+    // simply initializing the session will cause the FPS to drop to 35
+    // even without actually doing post-processing
+    m_session_ptr = new Ort::Session(m_env, model_path.c_str(), m_session_options);
+
+}
+
+PostProcessor::~PostProcessor()
+{
+    std::cout << "Post processor shut down" << std::endl;
+    delete m_session_ptr;
+}
+
+
+void PostProcessor::process(const std::vector<float *> &output)
+{
+    static int completed_frames = 0;
+
+    std::vector<Ort::Value> inputs;
+    for(int i=0; i<model_info.num_out_featuremaps; ++i){
+        auto shape = model_info.out_featuremap_shapes[i].chfirst_shape();
+        inputs.push_back(Ort::Value::CreateTensor<float>(s_memoryInfo,
+                                                        output[i],
+                                                        model_info.out_featuremap_sizes[i],
+                                                        shape.data(),
+                                                        shape.size()));
+    }
+
+    auto outputTensors =  m_session_ptr->Run(Ort::RunOptions{}, 
+                                        model_info.output_layer_names.data(), 
+                                        inputs.data(), 
+                                        model_info.num_out_featuremaps, 
+                                        output_node_names, 1);
+
+    completed_frames++;
+    std::cout << "post processing: " << completed_frames << std::endl;
+
+}
 
 //signal handler
 void signal_handler(int p_signal){
     runflag.store(false);
 }
-
-
 
 // frame preprocessing
 cv::Mat preprocess( const cv::Mat& image ) {
@@ -106,6 +126,7 @@ cv::Mat preprocess( const cv::Mat& image ) {
 
     return floatImage;
 }
+
 
 // seperate thread for loading and pre-processing images
 void load_images(){
@@ -127,7 +148,7 @@ void load_images(){
 }
 
 // Input callback function
-bool incallback_getframe(vector<const MX::Types::FeatureMap<float>*> dst, int streamLabel){
+bool incallback_getframe_bad(vector<const MX::Types::FeatureMap<float>*> dst, int streamLabel){
 
     static int count = 0;
 
@@ -157,20 +178,52 @@ bool incallback_getframe(vector<const MX::Types::FeatureMap<float>*> dst, int st
     return false;
 }
 
+
+// Input callback function
+bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, int streamLabel){
+
+    static int count = 0;
+
+    if(count >= image_list.size()){
+        std::cout << "No more files to process" << std::endl;
+        runflag.store(false);
+        return false;
+    }
+
+    if(runflag.load()){
+
+        cv::Mat inframe = cv::imread(image_list[count].string());
+        cv::Mat preProcframe = preprocess(inframe);
+
+        // Set preprocessed input data to be sent to accelarator
+        dst[0]->set_data((float*)preProcframe.data, false);
+        count++;
+        return true;
+    }
+    return false;
+}
+
 // Output callback function
 bool outcallback_getmxaoutput(vector<const MX::Types::FeatureMap<float>*> src, int streamLabel){
+
+    // initialize the PostProcessor the 1st time this function is called 
+    // and reuse it on subsequent calls. Since it is wrapped in unique_ptr 
+    // it will get deleted when program exits
+    static std::unique_ptr<PostProcessor> pp = nullptr;
+    if(!pp){
+        pp = std::make_unique<PostProcessor>(onnx_model_path);
+    }
 
     for(int i = 0; i<model_info.num_out_featuremaps ; ++i){
         src[i]->get_data(ofmap[i], true);
     }
+    // pp->process(ofmap);
 
-    {
-        std::unique_lock<std::mutex> lock(ofmap_queue_lock);
-        ofmap_queue.push_back(ofmap);
-    }
     num_frames_processed++;
     return true;
 }
+
+
 
 void print_model_info(){
     std::cout << "\n******** Model Index : " << model_info.model_index << " ********\n";
@@ -221,17 +274,17 @@ void run_inference(bool do_pre_load){
         }
 
         // Connect stream to acclerator
-        accl.connect_stream(&incallback_getframe, &outcallback_getmxaoutput, 10 /*unique stream ID*/, 0 /*Model ID */);
+        accl.connect_stream(&incallback_getframe_good, &outcallback_getmxaoutput, 10 /*unique stream ID*/, 0 /*Model ID */);
         std::cout << "Connected stream \n\n\n";
 
         std::chrono::milliseconds start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-        std::thread loading_thread(load_images);
+        //std::thread loading_thread(load_images);
         
 
         if(do_pre_load){
             // finish all the loading/preprocessing before starting accl
             // this method is consistent at 120 FPS for both yolov5s-SiLU-640 and yolov5n-SiLU-640
-            loading_thread.join();
+            //loading_thread.join();
             accl.start();
         }
         else{
@@ -239,7 +292,7 @@ void run_inference(bool do_pre_load){
             // for yolov5n-SiLU-640 sometimes we get 173 FPS and sometimes 41 FPS
             // for yolov5s-SiLU-640 we consistently get 170 FPS
             accl.start();
-            loading_thread.join();
+            //loading_thread.join();
         }
 
 
@@ -260,17 +313,6 @@ void run_inference(bool do_pre_load){
     }    
 }
 
-void only_load_images(){
-    std::chrono::milliseconds start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-    for(const auto& entry: image_list){
-        cv::Mat img = cv::imread(entry.string());
-        num_frames_processed++;
-    }
-    std::chrono::milliseconds duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) - start_ms;
-    float fps = (float)num_frames_processed * 1000 / (float)(duration.count());
-    std::cout << "duration (ms): " << duration.count() << ", num frames: " << num_frames_processed << " FPS: "<< fps << std::endl;
-}
 
 int main(int argc, char* argv[]){
 
