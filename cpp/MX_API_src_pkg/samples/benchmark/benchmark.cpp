@@ -18,8 +18,12 @@ namespace fs = std::filesystem;
 
 std::atomic_bool runflag;
 
-fs::path model_path = "cascadePlus/yolov5s-SiLU-640.dfp";
-fs::path onnx_model_path = "model_0_yolov5s-SiLU-640_post.onnx";
+fs::path model_path = "cascadePlus/yolov5n-SiLU-416.dfp";
+fs::path onnx_model_path = "model_0_yolov5n-SiLU-416_post.onnx";
+
+int total_num_frames = 1000;
+int model_input_width = 416;
+int model_input_height = 416;
 
 fs::path image_path = "/home/jquinn/datasets/coco/images/val2017"; 
 const char* const output_node_names[] = {"output0"};
@@ -35,16 +39,18 @@ MX::Types::MxModelInfo model_info;
 std::deque<cv::Mat> frames_queue;
 std::mutex frame_queue_lock;
 //Queue to add output from mxa
-//std::deque<std::vector<float*>> ofmap_queue;
-//std::mutex ofmap_queue_lock;
+std::deque<std::vector<float*>> ofmap_queue;
+std::mutex ofmap_queue_lock;
 std::condition_variable cond_var;
+std::condition_variable cond_var_out_empty;
+std::condition_variable cond_var_out_not_empty;
+
 
 //Vector to get output
 std::vector<float*> ofmap;
 
 int num_frames_processed=0;
-int model_input_width = 640;
-int model_input_height = 640;
+
 
 Ort::MemoryInfo PostProcessor::s_memoryInfo =  Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
@@ -52,19 +58,17 @@ PostProcessor::PostProcessor(const std::filesystem::path &model_path)
 {
     std::cout << "Loading model: " << model_path.string() << std::endl;
     // Onnx Threading option to limit CPU usage
-    // OrtEnv* environment;
-    // OrtThreadingOptions* envOpts = nullptr;
-    //Ort::GetApi().CreateThreadingOptions(&envOpts);
-    //Ort::GetApi().SetGlobalIntraOpNumThreads(envOpts, 2);
-    //Ort::GetApi().SetGlobalInterOpNumThreads(envOpts, 2);
-    //Ort::GetApi().SetGlobalSpinControl(envOpts, 0);
-    //Ort::GetApi().CreateEnvWithGlobalThreadPools(ORT_LOGGING_LEVEL_WARNING, "objectDetectionSample", envOpts, &environment);
+    OrtEnv* environment;
+    OrtThreadingOptions* envOpts = nullptr;
+    Ort::GetApi().CreateThreadingOptions(&envOpts);
+    Ort::GetApi().SetGlobalIntraOpNumThreads(envOpts, 2);
+    Ort::GetApi().SetGlobalInterOpNumThreads(envOpts, 2);
+    Ort::GetApi().SetGlobalSpinControl(envOpts, 0);
+    Ort::GetApi().CreateEnvWithGlobalThreadPools(ORT_LOGGING_LEVEL_WARNING, "objectDetectionSample", envOpts, &environment);
     
     m_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "post-processing");
     m_session_options.SetIntraOpNumThreads(2);
     m_session_options.SetInterOpNumThreads(2);
-    // simply initializing the session will cause the FPS to drop to 35
-    // even without actually doing post-processing
     m_session_ptr = new Ort::Session(m_env, model_path.c_str(), m_session_options);
 
 }
@@ -97,7 +101,7 @@ void PostProcessor::process(const std::vector<float *> &output)
                                         output_node_names, 1);
 
     completed_frames++;
-    std::cout << "post processing: " << completed_frames << std::endl;
+    // std::cout << "post processing: " << completed_frames << std::endl;
 
 }
 
@@ -145,8 +149,7 @@ bool incallback_getframe_bad(vector<const MX::Types::FeatureMap<float>*> dst, in
     static int count = 0;
 
     if(count >= image_list.size()){
-        std::cout << "No more files to process" << std::endl;
-        runflag.store(false);
+        std::cout << "No more files to load" << std::endl;
         return false;
     }
 
@@ -177,8 +180,7 @@ bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, i
     static int count = 0;
 
     if(count >= image_list.size()){
-        std::cout << "No more files to process" << std::endl;
-        runflag.store(false);
+        std::cout << "No more files to load" << std::endl;
         return false;
     }
 
@@ -195,23 +197,48 @@ bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, i
     return false;
 }
 
+
+void post_processing_worker(){
+
+
+    std::unique_ptr<PostProcessor> pp = std::make_unique<PostProcessor>(onnx_model_path);;
+
+    while(runflag.load()){
+
+        std::unique_lock<std::mutex> olock(ofmap_queue_lock);
+        cond_var_out_not_empty.wait(olock, [] { return !ofmap_queue.empty(); });
+        auto output = ofmap_queue.front();
+        pp->process(output);
+        num_frames_processed++;
+        ofmap_queue.pop_front();
+        cond_var_out_empty.notify_one();
+
+        if(num_frames_processed >= total_num_frames)
+            runflag.store(false);
+
+    }
+
+}
+
+
 // Output callback function
 bool outcallback_getmxaoutput(vector<const MX::Types::FeatureMap<float>*> src, int streamLabel){
 
-    // initialize the PostProcessor the 1st time this function is called 
-    // and reuse it on subsequent calls. Since it is wrapped in unique_ptr 
-    // it will get deleted when program exits
-    static std::unique_ptr<PostProcessor> pp = nullptr;
-    if(!pp){
-        pp = std::make_unique<PostProcessor>(onnx_model_path);
-    }
+    {
+        std::unique_lock<std::mutex> olock(ofmap_queue_lock);
+        // wait until the ofmap_queue is empty 
+        // because there is only enough memory allocated to hold one set of outputs
+        // we could just send the output to post_processor in this same thread
+        // but for some reason even creating the onnx session caused FPS to drop to 35 (without actually doing the post-processing)
 
-    for(int i = 0; i<model_info.num_out_featuremaps ; ++i){
-        src[i]->get_data(ofmap[i], true);
-    }
-    // pp->process(ofmap);
+        cond_var_out_empty.wait(olock, [] { return ofmap_queue.empty(); });
 
-    num_frames_processed++;
+        for(int i = 0; i<model_info.num_out_featuremaps ; ++i){
+            src[i]->get_data(ofmap[i], true);
+        }
+        ofmap_queue.push_back(ofmap);
+        cond_var_out_not_empty.notify_one();
+    }
     return true;
 }
 
@@ -251,6 +278,7 @@ void run_inference(bool do_pre_load){
 
     if(runflag.load()){
 
+        std::thread post_processing_thread(post_processing_worker);
 
         MX::Runtime::MxAccl accl(model_path.c_str());
 
@@ -289,6 +317,7 @@ void run_inference(bool do_pre_load){
 
 
         accl.wait();
+        post_processing_thread.join();
         std::chrono::milliseconds duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) - start_ms;
 
         float fps = (float)num_frames_processed * 1000 / (float)(duration.count());
@@ -313,7 +342,7 @@ int main(int argc, char* argv[]){
         if(entry.is_regular_file() && entry.path().extension() == ".jpg"){
             image_list.push_back(entry.path());
             n++;
-            if(n == 1000)
+            if(n == total_num_frames)
                 break;
         }
     }
