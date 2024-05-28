@@ -124,56 +124,6 @@ cv::Mat preprocess( const cv::Mat& image ) {
 }
 
 
-// seperate thread for loading and pre-processing images
-void load_images(){
-    
-    for(const auto& image_path : image_list){
-        cv::Mat inframe = cv::imread(image_path.string());
-        cv::Mat preProcframe = preprocess(inframe);
-        {
-            std::unique_lock<std::mutex> flock(frame_queue_lock);
-            frames_queue.push_back(preProcframe);
-        }
-        // notify the waiting thread that there are frames
-        cond_var.notify_one();
-
-        // std::cout << image_path.string() << std::endl;
-    }
-    std::cout << "Done pre-processing images" << std::endl;
-
-}
-
-// Input callback function
-bool incallback_getframe_bad(vector<const MX::Types::FeatureMap<float>*> dst, int streamLabel){
-
-    static int count = 0;
-
-    if(count >= image_list.size()){
-        std::cout << "No more files to load" << std::endl;
-        return false;
-    }
-
-    if(runflag.load()){
-
-        cv::Mat preProcframe;
-        {
-            std::unique_lock<std::mutex> ilock(frame_queue_lock);
-            // wait until the frames_queue is not empty
-            cond_var.wait(ilock, [] { return !frames_queue.empty(); });
-            // pop from frame queue
-            preProcframe = frames_queue.front();
-            frames_queue.pop_front();
-        }// releases in frame queue lock
-        count++;
-
-        // Set preprocessed input data to be sent to accelarator
-        dst[0]->set_data((float*)preProcframe.data, false);
-        return true;
-    }
-    return false;
-}
-
-
 // Input callback function
 bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, int streamLabel){
 
@@ -273,7 +223,7 @@ void print_model_info(){
 
 }
 
-void run_inference(bool do_pre_load){
+void run_inference(){
     runflag.store(true);
 
     if(runflag.load()){
@@ -298,23 +248,8 @@ void run_inference(bool do_pre_load){
         std::cout << "Connected stream \n\n\n";
 
         std::chrono::milliseconds start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-        //std::thread loading_thread(load_images);
         
-
-        if(do_pre_load){
-            // finish all the loading/preprocessing before starting accl
-            // this method is consistent at 120 FPS for both yolov5s-SiLU-640 and yolov5n-SiLU-640
-            //loading_thread.join();
-            accl.start();
-        }
-        else{
-            // start accl right away, do loading/preprocessing concurrently
-            // for yolov5n-SiLU-640 sometimes we get 173 FPS and sometimes 41 FPS
-            // for yolov5s-SiLU-640 we consistently get 170 FPS
-            accl.start();
-            //loading_thread.join();
-        }
-
+        accl.start();
 
         accl.wait();
         post_processing_thread.join();
@@ -356,8 +291,7 @@ int main(int argc, char* argv[]){
         std::cout << "application start \n";
         std::cout << "model path = " << model_path.c_str() << "\n";
 
-        bool do_pre_load = false;
-        run_inference(do_pre_load);
+        run_inference();
 
     }
 
