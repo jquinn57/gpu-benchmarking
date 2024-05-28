@@ -39,20 +39,12 @@ std::mutex frame_queue_lock;
 //std::mutex ofmap_queue_lock;
 std::condition_variable cond_var;
 
-
 //Vector to get output
 std::vector<float*> ofmap;
 
 int num_frames_processed=0;
 int model_input_width = 640;
 int model_input_height = 640;
-int pad_size_y;
-int pad_size_x;
-int model_width_after_padding = 640;
-int model_height_after_padding = 640;
-double origHeight = 0.0;
-double origWidth = 0.0;
-
 
 Ort::MemoryInfo PostProcessor::s_memoryInfo =  Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
@@ -68,7 +60,7 @@ PostProcessor::PostProcessor(const std::filesystem::path &model_path)
     //Ort::GetApi().SetGlobalSpinControl(envOpts, 0);
     //Ort::GetApi().CreateEnvWithGlobalThreadPools(ORT_LOGGING_LEVEL_WARNING, "objectDetectionSample", envOpts, &environment);
     
-    m_env = Ort::Env(ORT_LOGGING_LEVEL_VERBOSE, "post-processing");
+    m_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "post-processing");
     m_session_options.SetIntraOpNumThreads(2);
     m_session_options.SetInterOpNumThreads(2);
     // simply initializing the session will cause the FPS to drop to 35
