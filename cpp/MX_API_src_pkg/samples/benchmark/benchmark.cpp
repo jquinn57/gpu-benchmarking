@@ -48,8 +48,9 @@ int num_frames_processed=0;
 
 Ort::MemoryInfo PostProcessor::s_memoryInfo =  Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
-PostProcessor::PostProcessor(const fs::path &model_path)
+PostProcessor::PostProcessor(const fs::path &model_path): m_total_duration(0), m_count(0)
 {
+
     std::cout << "Loading model: " << model_path.string() << std::endl;
     // Onnx Threading option to limit CPU usage
     OrtEnv* environment;
@@ -69,7 +70,10 @@ PostProcessor::PostProcessor(const fs::path &model_path)
 
 PostProcessor::~PostProcessor()
 {
-    std::cout << "Post processor shut down" << std::endl;
+    std::cout << "Post processor: " << std::endl;
+    std::cout << "Number of frames processed: " << m_count <<  std::endl;
+    std::cout << "microseconds per frame: " << m_total_duration / m_count <<  std::endl;
+
     delete m_session_ptr;
 }
 
@@ -77,6 +81,10 @@ PostProcessor::~PostProcessor()
 void PostProcessor::process(const std::vector<float *> &output)
 {
     static int completed_frames = 0;
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+    // experiment: instead of post-processing try sleeping a small amount
+    //std::this_thread::sleep_for(std::chrono::microseconds(100));
 
     std::vector<Ort::Value> inputs;
     for(int i=0; i<model_info.num_out_featuremaps; ++i){
@@ -95,6 +103,10 @@ void PostProcessor::process(const std::vector<float *> &output)
                                         output_node_names, 1);
 
     completed_frames++;
+    auto endTime = std::chrono::high_resolution_clock::now();
+    m_total_duration += std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+    m_count += 1;
+
     // std::cout << "post processing: " << completed_frames << std::endl;
 
 }
@@ -149,14 +161,16 @@ void post_processing_worker(const fs::path& onnx_model_path){
 
     while(runflag.load()){
 
-        std::unique_lock<std::mutex> olock(ofmap_queue_lock);
-        cond_var_out_not_empty.wait(olock, [] { return !ofmap_queue.empty(); });
-        auto output = ofmap_queue.front();
-        if(postProcessFlag.load())
-            pp->process(output);
-        num_frames_processed++;
-        ofmap_queue.pop_front();
-        cond_var_out_empty.notify_one();
+        {
+            std::unique_lock<std::mutex> olock(ofmap_queue_lock);
+            cond_var_out_not_empty.wait(olock, [] { return !ofmap_queue.empty(); });
+            auto output = ofmap_queue.front();
+            if(postProcessFlag.load())
+                pp->process(output);
+            num_frames_processed++;
+            ofmap_queue.pop_front();
+            cond_var_out_empty.notify_one();
+        }
 
         if(num_frames_processed >= total_num_frames)
             runflag.store(false);

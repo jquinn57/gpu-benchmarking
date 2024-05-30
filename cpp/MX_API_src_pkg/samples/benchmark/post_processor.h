@@ -12,6 +12,9 @@ class PostProcessor
         ~PostProcessor();
         void process(const std::vector<float *> &output);
     private:
+        int m_count;
+        long long m_total_duration;
+        
         Ort::Env m_env;
         Ort::SessionOptions m_session_options;
         Ort::Session *m_session_ptr;
