@@ -25,6 +25,9 @@ class KasaReader:
         loop.run_forever()
     
     def start_reading(self):
+        # throw away old readings in case there was a delay after previous test
+        while not self.power_q.empty():
+            self.power_q.get()
         if not self.running:
             print('Kasa thread starting')
             self.running = True

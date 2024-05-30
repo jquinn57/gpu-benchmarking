@@ -10,10 +10,11 @@ import os
 import threading
 from queue import Queue
 import onnxruntime
-# from kasa_reader import KasaReader
+from kasa_reader import KasaReader
 from memryx import AsyncAccl
 from memryx import Benchmark
 import logging
+import pprint
 
 logging.basicConfig(level=logging.INFO)
 
@@ -128,8 +129,14 @@ class MX3Benchmark:
             )
             if os.path.exists(onnx_filename):
                 print(f"Including post processing {onnx_filename}")
+                opts = onnxruntime.SessionOptions()
+                opts.intra_op_num_threads = 1
+                opts.inter_op_num_threads = 1
+
                 self.post_processor_onnx = onnxruntime.InferenceSession(
-                    onnx_filename, providers=["CPUExecutionProvider"]
+                    onnx_filename, 
+                    providers=["CPUExecutionProvider"], 
+                    sess_options=opts
                 )
                 self.input_names = [c.name for c in self.post_processor_onnx.get_inputs()]
             else:
