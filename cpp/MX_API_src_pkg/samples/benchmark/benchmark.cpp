@@ -18,8 +18,6 @@ namespace fs = std::filesystem;
 std::atomic_bool runflag;
 std::atomic_bool postProcessFlag;
 
-//fs::path model_path = "cascadePlus/yolov5n-SiLU-640.dfp";
-//fs::path onnx_model_path = "model_0_yolov5n-SiLU-640_post.onnx";
 
 int total_num_frames = 1000;
 int model_input_width = 0;
@@ -291,6 +289,7 @@ int main(int argc, char* argv[]){
         }
     }
 
+    postProcessFlag.store(false);
     if(argc>2){
         std::string post_flag(argv[2]);
         if(post_flag == "--post"){
