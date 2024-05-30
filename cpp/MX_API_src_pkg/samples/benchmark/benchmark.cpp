@@ -13,27 +13,25 @@
 #include "MxAccl.h"
 #include "post_processor.h"
 
-
 namespace fs = std::filesystem;
 
 std::atomic_bool runflag;
+std::atomic_bool postProcessFlag;
 
-fs::path model_path = "cascadePlus/yolov5n-SiLU-416.dfp";
-fs::path onnx_model_path = "model_0_yolov5n-SiLU-416_post.onnx";
+//fs::path model_path = "cascadePlus/yolov5n-SiLU-640.dfp";
+//fs::path onnx_model_path = "model_0_yolov5n-SiLU-640_post.onnx";
 
 int total_num_frames = 1000;
-int model_input_width = 416;
-int model_input_height = 416;
+int model_input_width = 0;
+int model_input_height = 0;
 
 fs::path image_path = "/home/jquinn/datasets/coco/images/val2017"; 
 const char* const output_node_names[] = {"output0"};
 
 std::vector<fs::path> image_list;
 
-
 //model info
 MX::Types::MxModelInfo model_info;
-
 
 //Queue to add input frames
 std::deque<cv::Mat> frames_queue;
@@ -45,16 +43,14 @@ std::condition_variable cond_var;
 std::condition_variable cond_var_out_empty;
 std::condition_variable cond_var_out_not_empty;
 
-
 //Vector to get output
 std::vector<float*> ofmap;
 
 int num_frames_processed=0;
 
-
 Ort::MemoryInfo PostProcessor::s_memoryInfo =  Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
-PostProcessor::PostProcessor(const std::filesystem::path &model_path)
+PostProcessor::PostProcessor(const fs::path &model_path)
 {
     std::cout << "Loading model: " << model_path.string() << std::endl;
     // Onnx Threading option to limit CPU usage
@@ -64,9 +60,9 @@ PostProcessor::PostProcessor(const std::filesystem::path &model_path)
     Ort::GetApi().SetGlobalIntraOpNumThreads(envOpts, 2);
     Ort::GetApi().SetGlobalInterOpNumThreads(envOpts, 2);
     Ort::GetApi().SetGlobalSpinControl(envOpts, 0);
-    Ort::GetApi().CreateEnvWithGlobalThreadPools(ORT_LOGGING_LEVEL_WARNING, "objectDetectionSample", envOpts, &environment);
+    Ort::GetApi().CreateEnvWithGlobalThreadPools(ORT_LOGGING_LEVEL_WARNING, "post-processing", envOpts, &environment);
     
-    m_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "post-processing");
+    m_env = Ort::Env(ORT_LOGGING_LEVEL_VERBOSE, "post-processing");
     m_session_options.SetIntraOpNumThreads(2);
     m_session_options.SetInterOpNumThreads(2);
     m_session_ptr = new Ort::Session(m_env, model_path.c_str(), m_session_options);
@@ -148,7 +144,7 @@ bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, i
 }
 
 
-void post_processing_worker(){
+void post_processing_worker(const fs::path& onnx_model_path){
 
 
     std::unique_ptr<PostProcessor> pp = std::make_unique<PostProcessor>(onnx_model_path);;
@@ -158,7 +154,8 @@ void post_processing_worker(){
         std::unique_lock<std::mutex> olock(ofmap_queue_lock);
         cond_var_out_not_empty.wait(olock, [] { return !ofmap_queue.empty(); });
         auto output = ofmap_queue.front();
-        pp->process(output);
+        if(postProcessFlag.load())
+            pp->process(output);
         num_frames_processed++;
         ofmap_queue.pop_front();
         cond_var_out_empty.notify_one();
@@ -223,14 +220,18 @@ void print_model_info(){
 
 }
 
-void run_inference(){
+void run_inference(const fs::path& dfp_path){
     runflag.store(true);
 
     if(runflag.load()){
 
-        std::thread post_processing_thread(post_processing_worker);
+        // derive the onnx model path from the dfp path
+        std::string onnx_filename = "model_0_" + dfp_path.stem().string() + "_post.onnx";
+        fs::path onnx_path = dfp_path.parent_path() / onnx_filename;
 
-        MX::Runtime::MxAccl accl(model_path.c_str());
+        std::thread post_processing_thread(post_processing_worker, onnx_path);
+
+        MX::Runtime::MxAccl accl(dfp_path.string().c_str());
 
         model_info = accl.get_model_info(0);
         print_model_info();
@@ -272,6 +273,33 @@ void run_inference(){
 
 int main(int argc, char* argv[]){
 
+    fs::path dfp_path;
+    if (argc==1){
+        std::cout << "\n\nNo Arguments Passed \n\tuse ./benchmark <dfp-path> [--post] \n\n\n";
+        runflag.store(false);
+    }
+
+    if(argc>1){
+        dfp_path = fs::path(argv[1]);
+        if(fs::exists(dfp_path)){
+            std::cout << "Using: " << dfp_path.string() << std::endl;
+            runflag.store(true);
+        }
+        else{
+            std::cout << "DFP not found: " << dfp_path.string() << std::endl;;
+            runflag.store(false);
+        }
+    }
+
+    if(argc>2){
+        std::string post_flag(argv[2]);
+        if(post_flag == "--post"){
+            std::cout << "With post-processing" << std::endl;
+            postProcessFlag.store(true);
+        }
+    }
+    
+
     int n = 0;
     for(const auto& entry : fs::directory_iterator(image_path)){
         if(entry.is_regular_file() && entry.path().extension() == ".jpg"){
@@ -284,17 +312,13 @@ int main(int argc, char* argv[]){
     std::cout << "Number of images to process: " << image_list.size() << std::endl;
 
     signal(SIGINT, signal_handler);
-    runflag.store(true);
 
     if(runflag.load()){
 
         std::cout << "application start \n";
-        std::cout << "model path = " << model_path.c_str() << "\n";
-
-        run_inference();
+        run_inference(dfp_path);
 
     }
-
     else{
         std::cout << "App exiting without execution \n\n\n";       
     }
