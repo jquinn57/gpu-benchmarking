@@ -16,7 +16,7 @@ file(GLOB local_src
 	)
 
 add_executable(${app_name} ${local_src})
-#target_compile_options(${app_name}  PRIVATE -Wall -Wextra -g)
+target_compile_options(${app_name}  PRIVATE -Wall -Wextra)
 
 target_link_libraries(${app_name}  mx_accl  ${OpenCV_LIBS} onnxruntime ) 
 
