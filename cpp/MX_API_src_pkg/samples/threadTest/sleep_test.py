@@ -10,7 +10,7 @@ data = np.zeros( (len(input_sleep_us), len(output_sleep_us)), dtype=float)
 
 outputs_all = ['input_sleep_us, output_sleep_us, fps']
 
-run_test = False
+run_test = True
 if run_test:
     for i, in_sleep in enumerate(input_sleep_us):
         for j, out_sleep in enumerate(output_sleep_us):
@@ -25,15 +25,15 @@ if run_test:
 
     print(data)
 
-    with open('results.csv', 'wt') as fp:
+    with open('results2.csv', 'wt') as fp:
         for line in outputs_all:
             fp.write(line + '\n')
     
-    np.save('results.npy', data)
+    np.save('results2.npy', data)
 
 else:
 
-    data = np.load('results.npy')
+    data = np.load('results2.npy')
     data = data[1:, :]
     input_sleep_us = input_sleep_us[1:]
     num_rows = data.shape[0]
@@ -51,7 +51,7 @@ else:
     fig.text(0.04, 0.5, 'FPS', va='center', rotation='vertical')
 
     plt.tight_layout(rect=[0.05, 0.05, 1, 1])
-    plt.savefig('sleep-test-results.png')
+    plt.savefig('sleep-test-results2.png')
 
     plt.show()
 

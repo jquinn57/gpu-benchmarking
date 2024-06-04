@@ -7,6 +7,8 @@
 #include <fstream>
 #include <chrono>
 #include <ctime>
+#include <condition_variable>
+#include <mutex>
 #include "MxAccl.h"
 
 // comment this out to use zeros as inputs
@@ -16,9 +18,17 @@ namespace fs = std::filesystem;
 
 std::atomic_bool runflag;
 
+// bool is_busy = false;
+// std::condition_variable cond_var_ready;
+// std::mutex mtx;
+
 int total_num_frames = 1000;
 int model_input_width = 0;
 int model_input_height = 0;
+
+std::vector<int64_t> in_timestamps;
+std::vector<int64_t> out_timestamps;
+
 
 fs::path image_path = "/home/jquinn/datasets/coco/images/val2017"; 
 std::vector<fs::path> image_list;
@@ -55,6 +65,10 @@ cv::Mat preprocess( const cv::Mat& image ) {
     return floatImage;
 }
 
+int64_t timestamp(){
+    std::chrono::milliseconds t = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    return t.count();
+}
 
 // Input callback function
 bool incallback_getframe(vector<const MX::Types::FeatureMap<float>*> dst, int streamLabel){
@@ -73,7 +87,9 @@ bool incallback_getframe(vector<const MX::Types::FeatureMap<float>*> dst, int st
         // load images from ssd and resize and scale
         cv::Mat inframe = cv::imread(image_list[input_count].string());
         cv::Mat preProcframe = preprocess(inframe);
+        in_timestamps.push_back(timestamp());
         dst[0]->set_data((float*)preProcframe.data, false);
+
 #else
         // use zeros as inputs
         dst[0]->set_data(ifmap0, false);
@@ -93,7 +109,7 @@ bool outcallback_getmxaoutput(vector<const MX::Types::FeatureMap<float>*> src, i
     for(int i = 0; i<model_info.num_out_featuremaps ; ++i){
         src[i]->get_data(ofmap[i], true);
     }
-    
+    out_timestamps.push_back(timestamp());
     std::this_thread::sleep_for(std::chrono::microseconds(output_sleep_us));
     num_frames_processed++;
     return true;
@@ -132,6 +148,8 @@ void print_model_info(){
 float run_inference(const fs::path& dfp_path){
     runflag.store(true);
     float fps;
+    in_timestamps.reserve(total_num_frames);
+    out_timestamps.reserve(total_num_frames);
 
     if(runflag.load()){
 
@@ -207,6 +225,12 @@ int main(int argc, char* argv[]){
 
     float fps = run_inference(dfp_path);
     std::cout << input_sleep_us << ", " << output_sleep_us << ", " << fps << std::endl;
+
+    for(size_t i = 0; i < total_num_frames; i ++){
+        int64_t in_dt = in_timestamps[i] - in_timestamps[0];
+        int64_t out_dt = out_timestamps[i] - in_timestamps[0];
+        std::cout << in_dt << ", " << out_dt << std::endl;
+    }
 
     return 0;
 }
