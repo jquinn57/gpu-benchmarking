@@ -148,6 +148,7 @@ bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, i
         // Set preprocessed input data to be sent to accelarator
         dst[0]->set_data((float*)preProcframe.data, false);
         count++;
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
         return true;
     }
     return false;
