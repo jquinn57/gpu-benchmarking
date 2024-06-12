@@ -12,7 +12,7 @@
 #include "MxAccl.h"
 
 // comment this out to use zeros as inputs
-#define IMAGE_INPUTS
+//#define IMAGE_INPUTS
 
 namespace fs = std::filesystem;
 
@@ -66,8 +66,10 @@ cv::Mat preprocess( const cv::Mat& image ) {
 }
 
 int64_t timestamp(){
-    std::chrono::milliseconds t = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-    return t.count();
+
+    auto now = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch());
+    return duration.count();
 }
 
 // Input callback function
@@ -92,6 +94,7 @@ bool incallback_getframe(vector<const MX::Types::FeatureMap<float>*> dst, int st
 
 #else
         // use zeros as inputs
+        in_timestamps.push_back(timestamp());
         dst[0]->set_data(ifmap0, false);
 #endif
 
