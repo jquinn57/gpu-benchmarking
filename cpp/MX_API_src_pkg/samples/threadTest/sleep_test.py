@@ -1,16 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import subprocess
-from IPython import embed
 
-input_sleep_us = [0, 100, 200, 300, 400, 800]
+input_sleep_us = [100, 200, 300, 400, 800]
 output_sleep_us = [0, 5, 10, 20, 50, 100, 200, 400, 800]
 working_dir = '/home/jquinn/gpu-benchmarking/cpp/MX_API_src_pkg/build/samples/threadTest'
 data = np.zeros( (len(input_sleep_us), len(output_sleep_us)), dtype=float)
 
 outputs_all = ['input_sleep_us, output_sleep_us, fps']
 
-run_test = True
+run_test = False
 if run_test:
     for i, in_sleep in enumerate(input_sleep_us):
         for j, out_sleep in enumerate(output_sleep_us):
@@ -25,15 +24,15 @@ if run_test:
 
     print(data)
 
-    with open('results2.csv', 'wt') as fp:
+    with open('results-new.csv', 'wt') as fp:
         for line in outputs_all:
             fp.write(line + '\n')
     
-    np.save('results2.npy', data)
+    np.save('results-new.npy', data)
 
 else:
 
-    data = np.load('results2.npy')
+    data = np.load('results-new.npy')
     data = data[1:, :]
     input_sleep_us = input_sleep_us[1:]
     num_rows = data.shape[0]

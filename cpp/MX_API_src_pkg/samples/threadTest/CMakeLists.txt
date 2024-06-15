@@ -18,6 +18,6 @@ file(GLOB local_src
 add_executable(${app_name} ${local_src})
 target_compile_options(${app_name}  PRIVATE -Wall -Wextra)
 
-target_link_libraries(${app_name}  mx_accl  ${OpenCV_LIBS} onnxruntime ) 
+target_link_libraries(${app_name}  /usr/lib/x86_64-linux-gnu/libmx_accl.so  ${OpenCV_LIBS} onnxruntime ) 
 
 file(COPY "../models/yolov7Tiny416/" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
