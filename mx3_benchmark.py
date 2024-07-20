@@ -120,7 +120,7 @@ class MX3Benchmark:
         self.resolution = model_config["resolution"]
         accl = AsyncAccl(dfp_filename, chip_gen=3.1)
 
-        self.input_names = ["0", "1", "2"]
+        self.input_names = ["0", "1", "2", "3", "4", "5"]  # TODO: generalize this
         if self.do_post_processing:
             model_dir = os.path.dirname(dfp_filename)
             dfp_basename = os.path.basename(dfp_filename)
@@ -209,7 +209,12 @@ def main():
     num_images = int(config['settings']['num_images'])
 
     for model in config["models"]:
-        
+        batch_size = 1
+        fps_bm_acc = 0
+        fps_acc = 0
+        power_acc = 0
+        latency_ms_acc = 0
+
         for n in range(args.niters):
             time.sleep(2)
             print()
@@ -217,27 +222,31 @@ def main():
 
             model_config = config["models"][model]
             res = model_config["resolution"]
-            batch_size = 1
 
             # doing the Benchmark tests before the run_test call changes the results
             # use Benchmark for a seperate FPS and latency measurement
             if not args.skip_benchmark:
                 with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
                     _, latency_ms, _ = bm.run(threading=False)
+                    latency_ms_acc += latency_ms
                 with Benchmark(dfp=model_config["filename"], verbose=2, chip_gen=3.1) as bm:
                     _, _, fps_bm = bm.run(frames=num_images)
-                    fps_bm = int(round(fps_bm))
+                    fps_bm_acc += fps_bm
             else:
                 latency_ms = 0
                 fps_bm = 0
 
             time.sleep(1)
             data = mx3_benchmark.run_test(model_config)
+            power_acc += data['system_power']
+            fps_acc += data['fps']
             time.sleep(1)
 
-
-            data["latency_ms"] = latency_ms
-            outputs.append(f"{model}, {res}, {batch_size}, {data['latency_ms']}, {data['fps']},  {fps_bm}, {data['system_power']}")
+        power = power_acc / args.niters
+        fps = fps_acc / args.niters
+        fps_bm = fps_bm_acc / args.niters
+        latency_ms = latency_ms_acc / args.niters
+        outputs.append(f"{model}, {res}, {batch_size}, {latency_ms:.2f}, {fps:.0f},  {fps_bm:.0f}, {power:.0f}")
 
     mx3_benchmark.shutdown()
     with open(args.output_csv, "wt") as fp:

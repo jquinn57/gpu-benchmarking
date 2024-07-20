@@ -24,7 +24,7 @@ int model_input_width = 0;
 int model_input_height = 0;
 
 fs::path image_path = "/home/jquinn/datasets/coco/images/val2017"; 
-const char* const output_node_names[] = {"output0"};
+const char* const output_node_names[] = {"output"};
 
 std::vector<fs::path> image_list;
 
@@ -148,7 +148,7 @@ bool incallback_getframe_good(vector<const MX::Types::FeatureMap<float>*> dst, i
         // Set preprocessed input data to be sent to accelarator
         dst[0]->set_data((float*)preProcframe.data, false);
         count++;
-        std::this_thread::sleep_for(std::chrono::microseconds(1000));
+        //std::this_thread::sleep_for(std::chrono::microseconds(1000));
         return true;
     }
     return false;

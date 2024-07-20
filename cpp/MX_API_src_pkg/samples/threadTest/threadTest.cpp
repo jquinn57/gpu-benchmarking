@@ -12,7 +12,7 @@
 #include "MxAccl.h"
 
 // comment this out to use zeros as inputs
-//#define IMAGE_INPUTS
+#define IMAGE_INPUTS
 
 namespace fs = std::filesystem;
 
@@ -232,7 +232,7 @@ int main(int argc, char* argv[]){
     for(size_t i = 0; i < total_num_frames; i ++){
         int64_t in_dt = in_timestamps[i] - in_timestamps[0];
         int64_t out_dt = out_timestamps[i] - in_timestamps[0];
-        std::cout << in_dt << ", " << out_dt << std::endl;
+        //std::cout << in_dt << ", " << out_dt << std::endl;
     }
 
     return 0;
