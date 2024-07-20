@@ -1,35 +1,35 @@
 ---
 settings:
   num_images: 1000
-  kasa: ['192.168.1.87', 'workstation']
+  kasa: ['192.168.1.119', 'workstation']
   # comment out image_path to use zeros as inputs
   image_path: /home/jquinn/datasets/coco/images/val2017/
   post_processing: true
 models:
 
-  # yolov5n-SiLU-416:
-  #   filename: ./dfp_models/yolov5n-SiLU-416.dfp
-  #   resolution: 416
+  yolov5n-SiLU-416:
+    filename: ./dfp_models/yolov5n-SiLU-416.dfp
+    resolution: 416
 
-  # yolov5n-SiLU-640:
-  #   filename: ./dfp_models/yolov5n-SiLU-640.dfp
-  #   resolution: 640
+  yolov5n-SiLU-640:
+    filename: ./dfp_models/yolov5n-SiLU-640.dfp
+    resolution: 640
 
-  # yolov5s-SiLU-416:
-  #   filename: ./dfp_models/yolov5s-SiLU-416.dfp
-  #   resolution: 416
+  yolov5s-SiLU-416:
+    filename: ./dfp_models/yolov5s-SiLU-416.dfp
+    resolution: 416
 
-  # yolov5s-SiLU-640:
-  #   filename: ./dfp_models/yolov5s-SiLU-640.dfp
-  #   resolution: 640
+  yolov5s-SiLU-640:
+    filename: ./dfp_models/yolov5s-SiLU-640.dfp
+    resolution: 640
     
-  # yolov7-tiny-416:
-  #   filename: ./dfp_models/yolov7-tiny-416.dfp
-  #   resolution: 416
+  yolov7-tiny-416:
+    filename: ./dfp_models/yolov7-tiny-416.dfp
+    resolution: 416
 
-  # yolov7-tiny-640:
-  #   filename: ./dfp_models/yolov7-tiny-640.dfp
-  #   resolution: 640
+  yolov7-tiny-640:
+    filename: ./dfp_models/yolov7-tiny-640.dfp
+    resolution: 640
 
   yolov8n-416:
     filename: ./dfp_models/yolov8n-416.dfp

@@ -2,8 +2,8 @@
 settings:
   num_images: 1000
   onnx_ep: cuda
-  kasa: ['192.168.1.87', 'workstation']
-  pmd: ['/dev/ttyUSB0', 'PCIE1']
+  kasa: ['192.168.1.119', 'workstation']
+  pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
   image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
   # yolov5n-LeakyReLU-416:
