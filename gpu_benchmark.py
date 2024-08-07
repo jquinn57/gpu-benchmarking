@@ -118,6 +118,11 @@ class GPUBenchmark:
                 count = 0
                 is_warm = True
                 t0 = time.perf_counter()
+                # clear out the power measurement queue
+                if self.kasa_reader:
+                    self.kasa_reader.avg_recent_readings()
+                if self.pmd_reader:
+                    self.pmd_reader.avg_recent_readings()
 
         dt = time.perf_counter() - t0
         time_per_image = 1000 * dt / count
