@@ -168,6 +168,7 @@ class MX3Benchmark:
 
         if self.kasa_reader:
             power_avg_kasa = int(round(self.kasa_reader.avg_recent_readings()))
+            self.kasa_reader.mark_event()
         else:
             power_avg_kasa = 0
 

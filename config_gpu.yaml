@@ -6,35 +6,16 @@ settings:
   pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
   image_path: /home/jquinn/datasets/coco/images/val2017/
 models:
-  # yolov5n-LeakyReLU-416:
-  #   filename: ./onnx_models/yolov5n-LeakyReLU-dynamic.onnx
-  #   resolution: 416
-  #   batch_sizes: [1, 2, 4, 8, 16, 24, 32, 48, 64]
-
-  # yolov5n-LeakyReLU-640:
-  #   filename: ./onnx_models/yolov5n-LeakyReLU-dynamic.onnx
-  #   resolution: 640
-  #   batch_sizes: [1, 2, 4, 8, 16, 24, 32, 48, 64]
 
   yolov5n-SiLU-416:
     filename: ./onnx_models/yolov5n-SiLU-dynamic.onnx
     resolution: 416
-    batch_sizes: [1, 2, 4, 8, 16, 24, 32, 48, 64]
+    batch_sizes: [1, 1, 2, 4, 8, 16, 24, 32, 48, 64]
 
   yolov5n-SiLU-640:
     filename: ./onnx_models/yolov5n-SiLU-dynamic.onnx
     resolution: 640
     batch_sizes: [1, 2, 4, 8, 16, 24, 32, 48, 64]
-
-  # yolov5s-LeakyReLU-416:
-  #   filename: ./onnx_models/yolov5s-LeakyReLU-dynamic.onnx
-  #   resolution: 416
-  #   batch_sizes: [1, 2, 4, 8, 16, 24, 32, 48, 64]
-
-  # yolov5s-LeakyReLU-640:
-  #   filename: ./onnx_models/yolov5s-LeakyReLU-dynamic.onnx
-  #   resolution: 640
-  #   batch_sizes: [1, 2, 4, 8, 16, 24, 32, 48, 64]
 
   yolov5s-SiLU-416:
     filename: ./onnx_models/yolov5s-SiLU-dynamic.onnx
