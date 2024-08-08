@@ -32,20 +32,24 @@ class KasaReader:
         # throw away old readings in case there was a delay after previous test
         while not self.power_q.empty():
             self.power_q.get()
-        self.mark_event()
         if not self.running:
             print('Kasa thread starting')
             self.running = True
             self.thread.start()
             asyncio.run_coroutine_threadsafe(self.read_power(), self.loop)
+            time.sleep(4)
+        self.mark_event()
+
 
     def mark_event(self):
+        print('Mark event')
         self.event_q.put(time.perf_counter())
 
 
     def stop_reading(self):
         if self.running:
             print('Kasa thread stoping')
+            time.sleep(4)
             self.running = False
             self.loop.call_later(2 * self.dt_s, self.loop.stop)
             self.thread.join()

@@ -116,6 +116,7 @@ class MX3Benchmark:
 
         if self.kasa_reader:
             self.kasa_reader.start_reading()
+
         dfp_filename = model_config["filename"]
         self.resolution = model_config["resolution"]
         accl = AsyncAccl(dfp_filename, chip_gen=3.1)
