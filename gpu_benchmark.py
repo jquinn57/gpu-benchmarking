@@ -63,9 +63,12 @@ class GPUBenchmark:
 
         if do_inference:
             use_cuda = self.settings["onnx_ep"] == "cuda"
-            providers = (
-                ["CUDAExecutionProvider"] if use_cuda else ["TensorrtExecutionProvider"]
-            )
+            trt_options = { 'trt_engine_cache_enable': True, 'trt_engine_cache_path': './trt_cache'}
+            if use_cuda:
+                providers = ["CUDAExecutionProvider"]
+            else:
+                providers = [("TensorrtExecutionProvider", trt_options), "CUDAExecutionProvider"]
+            
             session = onnxruntime.InferenceSession(
                 model_config["filename"], providers=providers
             )
@@ -103,9 +106,7 @@ class GPUBenchmark:
                     img_new = self.image_q.get()
                     img_batch[i, :, :, :] = img_new
             else:
-                img_batch = np.random.random((batch_size, 3, res, res)).astype(
-                    np.float32
-                )
+                img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
 
             if do_inference:
                 y = session.run(output_names, {input_name: img_batch})[0]

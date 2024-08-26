@@ -1,7 +1,7 @@
 ---
 settings:
-  num_images: 1000
-  onnx_ep: tensorRT
+  num_images: 2000
+  onnx_ep: cuda
   kasa: ['192.168.1.119', 'jetsonorin']
   # pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
   image_path: /ssd/gpu-benchmarking/val2017
