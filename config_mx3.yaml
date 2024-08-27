@@ -1,7 +1,7 @@
 ---
 settings:
   num_images: 1000
-  kasa: ['192.168.1.119', 'workstation']
+  kasa: ['192.168.1.119', 'MX3']
   # comment out image_path to use zeros as inputs
   image_path: /home/jquinn/datasets/coco/images/val2017/
   post_processing: true
