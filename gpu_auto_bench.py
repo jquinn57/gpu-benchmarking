@@ -19,7 +19,7 @@ class AutoGPUBenchmark:
     def __init__(self, settings):
         self.settings = settings
         self.pmd_reader = None
-        self.batch_q = queue.Queue()
+        
         self.running = False
         if 'pmd' in settings:
             self.pmd_reader = PMDReader(*settings['pmd'])
@@ -31,15 +31,12 @@ class AutoGPUBenchmark:
         if self.pmd_reader:
             self.pmd_reader.stop_reading()
 
-    def batch_worker(self, res, batch_size, nbatches):
-        # empty out the queue if there were some leftovers from previous run (shoudlnt happen)
-        while not self.batch_q.empty():
-            img = self.batch_q.get()
-            print('leftover')
+    def batch_worker(self, batch_q, res, batch_size, nbatches):
+
         print("starting image_worker thread")
         for n in range(nbatches):
             img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
-            self.batch_q.put(img_batch)
+            batch_q.put(img_batch)
 
     def run_test(self, onnx_filename, batch_size=1):
             """
@@ -85,7 +82,8 @@ class AutoGPUBenchmark:
             # option 1: create input once outside of loop (zeros or random)
             # img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
 
-            self.thread = threading.Thread(target=self.batch_worker, args=(res, batch_size, nbatches))
+            batch_q = queue.Queue()
+            self.thread = threading.Thread(target=self.batch_worker, args=(batch_q, res, batch_size, nbatches))
             self.thread.start()
 
             t0 = time.perf_counter()
@@ -96,7 +94,7 @@ class AutoGPUBenchmark:
                 #img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
 
                 # option 3: create inputs in seperate thread, pull from queue
-                img_batch = self.batch_q.get()
+                img_batch = batch_q.get()
 
                 y = session.run(output_names, {input_name: img_batch})[0]
                 count += batch_size
@@ -157,7 +155,6 @@ class AutoGPUBenchmark:
 
 def main():
     parser = argparse.ArgumentParser()
-
     parser.add_argument('--config', help='Path to config yaml', default='gpu_auto_bench.yaml')
     args = parser.parse_args()
 
@@ -178,18 +175,28 @@ def main():
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
     gsapi.append_row(header)
 
-
+    batch_sizes = config['settings']['batch_sizes']
     for model_name in model_list:
-        print('\n')
-        results = bench.run_test(model_name)
         model_name_short = os.path.basename(model_name).replace('.onnx', '')
-        row = [model_name_short, 
-               results['resolution'],
-               results['batch_size'],
-               results['fps'],
-               results['latency_ms'],
-               results['pcie_power']]
-        gsapi.append_row(row)
+        print('\n')
+        print(model_name_short)
+        for batch_size in batch_sizes:
+            print(f'batch_size = {batch_size}')
+            try:
+                results = bench.run_test(model_name, batch_size=batch_size)
+                row = [model_name_short, 
+                    results['resolution'],
+                    results['batch_size'],
+                    results['fps'],
+                    results['latency_ms'],
+                    results['pcie_power']]
+                gsapi.append_row(row)
+            except Exception as e:
+                print(e)
+                print('Error, skipping to next model')
+                row = [model_name_short, '', batch_size, '', '', '', str(e)]
+                gsapi.append_row(row)
+
 
     bench.shutdown()
 

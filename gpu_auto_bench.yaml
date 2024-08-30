@@ -3,7 +3,8 @@ settings:
   num_images: 2000
   onnx_ep: cuda
   pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
-  model_path: ./onnx_models_auto/
+  model_path: ./onnx_models_db/
   resolution: 416
   google_sheet_name: 'GPU-Auto-Bench1'
   google_sheet_tab: 0
+  batch_sizes: [1, 2]
