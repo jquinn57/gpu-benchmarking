@@ -9,6 +9,8 @@ import numpy as np
 import glob
 import os
 import pprint
+import threading
+import queue
 from pmd_reader import PMDReader
 from google_sheet_api import GoogleSheetAPI
 
@@ -17,6 +19,8 @@ class AutoGPUBenchmark:
     def __init__(self, settings):
         self.settings = settings
         self.pmd_reader = None
+        self.batch_q = queue.Queue()
+        self.running = False
         if 'pmd' in settings:
             self.pmd_reader = PMDReader(*settings['pmd'])
             if not self.pmd_reader.check_device():
@@ -26,6 +30,16 @@ class AutoGPUBenchmark:
     def shutdown(self):
         if self.pmd_reader:
             self.pmd_reader.stop_reading()
+
+    def batch_worker(self, res, batch_size, nbatches):
+        # empty out the queue if there were some leftovers from previous run (shoudlnt happen)
+        while not self.batch_q.empty():
+            img = self.batch_q.get()
+            print('leftover')
+        print("starting image_worker thread")
+        for n in range(nbatches):
+            img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
+            self.batch_q.put(img_batch)
 
     def run_test(self, onnx_filename, batch_size=1):
             """
@@ -68,15 +82,21 @@ class AutoGPUBenchmark:
             if self.pmd_reader:
                 self.pmd_reader.start_reading()
 
-            # option 1: create input once outside of loop
-            img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
+            # option 1: create input once outside of loop (zeros or random)
+            # img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
+
+            self.thread = threading.Thread(target=self.batch_worker, args=(res, batch_size, nbatches))
+            self.thread.start()
 
             t0 = time.perf_counter()
             for n in range(nbatches):
 
-                # option 1: create new input each time through the loop
+                # option 1: create new input each time through the loop (zeros or random)
                 #img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
                 #img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
+
+                # option 3: create inputs in seperate thread, pull from queue
+                img_batch = self.batch_q.get()
 
                 y = session.run(output_names, {input_name: img_batch})[0]
                 count += batch_size
@@ -112,6 +132,8 @@ class AutoGPUBenchmark:
             output["resolution"] = res
             pprint.pprint(output)
 
+            # wait for worker thread to finish before moving on
+            self.thread.join()
             return output
 
 
