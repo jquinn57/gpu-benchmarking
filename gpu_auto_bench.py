@@ -139,6 +139,7 @@ def main():
     
     onnx_model_path = config['settings']['model_path']
     model_list = glob.glob(os.path.join(onnx_model_path, '*.onnx'))
+    model_list.sort()
     pprint.pprint(model_list)
     num_models = len(model_list)
     print(num_models)
