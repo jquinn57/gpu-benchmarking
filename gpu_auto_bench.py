@@ -36,9 +36,9 @@ class AutoGPUBenchmark:
             use_cuda = (self.settings['onnx_ep'].lower() == 'cuda')
             trt_options = { 'trt_engine_cache_enable': True, 'trt_engine_cache_path': './trt_cache'}
             if use_cuda:
-                providers = ['CUDAExecutionProvider']
+                providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             else:
-                providers = [('TensorrtExecutionProvider', trt_options), 'CUDAExecutionProvider']
+                providers = [('TensorrtExecutionProvider', trt_options), 'CUDAExecutionProvider', 'CPUExecutionProvider']
             
             session = onnxruntime.InferenceSession(onnx_filename, providers=providers)
             output_names = [x.name for x in session.get_outputs()]
@@ -68,10 +68,16 @@ class AutoGPUBenchmark:
             if self.pmd_reader:
                 self.pmd_reader.start_reading()
 
+            # option 1: create input once outside of loop
+            img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
+
             t0 = time.perf_counter()
             for n in range(nbatches):
 
-                img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
+                # option 1: create new input each time through the loop
+                #img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
+                #img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
+
                 y = session.run(output_names, {input_name: img_batch})[0]
                 count += batch_size
                 # restart the counter and timer after warmup batch
