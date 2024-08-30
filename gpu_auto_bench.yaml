@@ -1,0 +1,7 @@
+---
+settings:
+  num_images: 1000
+  onnx_ep: cuda
+  pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
+  model_path: ./onnx_models_auto/
+  resolution: 416
