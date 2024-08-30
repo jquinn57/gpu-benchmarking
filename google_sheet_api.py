@@ -14,7 +14,10 @@ class GoogleSheetAPI():
         self.worksheet = None
     
     def open_worksheet(self, worksheet_id):
-        self.worksheet = self.spreadsheet.get_worksheet_by_id(worksheet_id)
+        if type(worksheet_id) == int:
+            self.worksheet = self.spreadsheet.get_worksheet(worksheet_id)
+        else:
+            self.worksheet = self.spreadsheet.get_worksheet_by_id(worksheet_id)
 
     def get_dataframe(self, cell_range, includes_header=False):
         if self.worksheet is None:

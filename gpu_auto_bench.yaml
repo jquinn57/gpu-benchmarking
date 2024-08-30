@@ -5,3 +5,5 @@ settings:
   pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
   model_path: ./onnx_models_auto/
   resolution: 416
+  google_sheet_name: 'GPU-Auto-Bench1'
+  google_sheet_tab: 1

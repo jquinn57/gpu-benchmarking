@@ -174,8 +174,8 @@ def main():
 
     bench = AutoGPUBenchmark(config['settings'])
     header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)']
-    gsapi = GoogleSheetAPI('GPU-Auto-Bench1')
-    gsapi.open_worksheet('0')
+    gsapi = GoogleSheetAPI(config['settings']['google_sheet_name'])
+    gsapi.open_worksheet(config['settings']['google_sheet_tab'])
     gsapi.append_row(header)
 
 
