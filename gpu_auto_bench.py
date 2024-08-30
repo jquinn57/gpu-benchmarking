@@ -91,7 +91,7 @@ class AutoGPUBenchmark:
             t0 = time.perf_counter()
             for n in range(nbatches):
 
-                # option 1: create new input each time through the loop (zeros or random)
+                # option 2: create new input each time through the loop (zeros or random)
                 #img_batch = np.random.random((batch_size, 3, res, res)).astype(np.float32)
                 #img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
 

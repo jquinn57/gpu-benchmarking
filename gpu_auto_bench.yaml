@@ -6,4 +6,4 @@ settings:
   model_path: ./onnx_models_auto/
   resolution: 416
   google_sheet_name: 'GPU-Auto-Bench1'
-  google_sheet_tab: 1
+  google_sheet_tab: 0
