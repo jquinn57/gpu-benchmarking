@@ -7,4 +7,4 @@ settings:
   resolution: 416
   google_sheet_name: 'GPU-Auto-Bench1'
   google_sheet_tab: 0
-  batch_sizes: [1, 2]
+  batch_sizes: [1, 2, 4, 6, 8]
