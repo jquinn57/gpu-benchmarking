@@ -6,7 +6,6 @@ import yaml
 import time
 import math
 import numpy as np
-import glob
 import os
 import pprint
 import threading
@@ -134,23 +133,15 @@ class AutoGPUBenchmark:
             self.thread.join()
             return output
 
-
-# def inspect_shapes(model):
-#     graph = model.graph
-#     # Inspect input sizes
-#     print("Inputs:")
-#     for input_tensor in graph.input:
-#         input_name = input_tensor.name
-#         input_shape = [dim.dim_value for dim in input_tensor.type.tensor_type.shape.dim]
-#         print(f"{input_name}: {input_shape}")
-
-#     # Inspect output sizes
-#     print("Outputs:")
-#     for output_tensor in graph.output:
-#         output_name = output_tensor.name
-#         output_shape = [dim.dim_value for dim in output_tensor.type.tensor_type.shape.dim]
-#         print(f"{output_name}: {output_shape}")
-
+def get_model_list(root_dir):
+    model_list = []
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        if 'onnx_dynamic.onnx' in filenames:
+            model_name = os.path.basename(dirpath)
+            model_path = os.path.join(dirpath, 'onnx_dynamic.onnx')
+            model_list.append((model_name, model_path))
+    model_list.sort()
+    return model_list
 
 
 def main():
@@ -163,11 +154,7 @@ def main():
     pprint.pprint(config)
     
     onnx_model_path = config['settings']['model_path']
-    model_list = glob.glob(os.path.join(onnx_model_path, '*.onnx'))
-    model_list.sort()
-    pprint.pprint(model_list)
-    num_models = len(model_list)
-    print(num_models)
+    model_list = get_model_list(onnx_model_path)
 
     bench = AutoGPUBenchmark(config['settings'])
     header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)']
@@ -176,15 +163,15 @@ def main():
     gsapi.append_row(header)
 
     batch_sizes = config['settings']['batch_sizes']
-    for model_name in model_list:
-        model_name_short = os.path.basename(model_name).replace('.onnx', '')
+    for model_name, model_path in model_list:
         print('\n')
-        print(model_name_short)
+        print(model_name)
+        print(model_path)
         for batch_size in batch_sizes:
             print(f'batch_size = {batch_size}')
             try:
-                results = bench.run_test(model_name, batch_size=batch_size)
-                row = [model_name_short, 
+                results = bench.run_test(model_path, batch_size=batch_size)
+                row = [model_name, 
                     results['resolution'],
                     results['batch_size'],
                     results['fps'],
@@ -194,9 +181,8 @@ def main():
             except Exception as e:
                 print(e)
                 print('Error, skipping to next model')
-                row = [model_name_short, '', batch_size, '', '', '', str(e)]
+                row = [model_name, '', batch_size, '', '', '', str(e)]
                 gsapi.append_row(row)
-
 
     bench.shutdown()
 
