@@ -147,6 +147,7 @@ def get_model_list(root_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='Path to config yaml', default='gpu_auto_bench.yaml')
+    parser.add_argument('--start_with', help='Model in sorted list to start with', default=None)
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -162,12 +163,18 @@ def main():
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
     gsapi.append_row(header)
 
+    skip_models = args.start_with is not None
     first_time = True
     batch_sizes = config['settings']['batch_sizes']
     for model_name, model_path in model_list:
         print('\n')
         print(model_name)
         print(model_path)
+        if skip_models:
+            if model_name != args.start_with:
+                continue
+            skip_models = False
+
         # let the first time through be a warmup
         if first_time:
             results = bench.run_test(model_path, batch_size=1)
