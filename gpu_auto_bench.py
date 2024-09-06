@@ -162,11 +162,17 @@ def main():
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
     gsapi.append_row(header)
 
+    first_time = True
     batch_sizes = config['settings']['batch_sizes']
     for model_name, model_path in model_list:
         print('\n')
         print(model_name)
         print(model_path)
+        # let the first time through be a warmup
+        if first_time:
+            results = bench.run_test(model_path, batch_size=1)
+            first_time = False
+
         for batch_size in batch_sizes:
             print(f'batch_size = {batch_size}')
             try:

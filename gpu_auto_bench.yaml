@@ -6,5 +6,5 @@ settings:
   model_path: '/home/jquinn/yolobench/'
   resolution: 416
   google_sheet_name: 'GPU-Auto-Bench1'
-  google_sheet_tab: 2
-  batch_sizes: [1]
+  google_sheet_tab: 3
+  batch_sizes: [1, 2, 4, 6, 8]
