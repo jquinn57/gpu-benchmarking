@@ -7,7 +7,7 @@ class GoogleSheetAPI():
         #scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
         scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
 
-        creds = ServiceAccountCredentials.from_json_keyfile_name('astute-anagram-378000-52e17a0d93f4.json', scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_name('astute-anagram-378000-104b46238f90.json', scope)
         client = gspread.authorize(creds)
         self.spreadsheet = client.open(spreadsheet_name)
         print(self.spreadsheet.worksheets)
@@ -29,7 +29,7 @@ class GoogleSheetAPI():
             dataframe.columns = dataframe.iloc[0]
             dataframe = dataframe[1:]
 
-        dataframe = dataframe.apply(pd.to_numeric, errors='coerce')
+        # dataframe = dataframe.apply(pd.to_numeric, errors='coerce')
         return dataframe
 
     def update_cells(self, cell_range, values):
