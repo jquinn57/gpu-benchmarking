@@ -4,6 +4,7 @@ import pprint
 import yaml
 import numpy as np
 import os
+import json
 import pprint
 from kasa_reader import KasaReader
 from google_sheet_api import GoogleSheetAPI
@@ -72,34 +73,51 @@ def get_model_list(root_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='Path to config yaml', default='mx3_auto_bench.yaml')
-    parser.add_argument('--start_with', help='Model in sorted list to start with', default=None)
     args = parser.parse_args()
 
     with open(args.config) as fp:
         config = yaml.safe_load(fp)
     pprint.pprint(config)
     
-    onnx_model_path = config['settings']['model_path']
-    model_list = get_model_list(onnx_model_path)
+    model_list = get_model_list(config['settings']['model_path'])
 
+    # check local file for last model attemtped
+    last_model_attempted = None
+    if os.path.exists('last_model_attempted.txt'):
+        with open('last_model_attempted.txt', 'rt') as fp:
+            last_model_attempted = fp.readline().strip()
+        
     bench = AutoMX3Benchmark(config['settings'])
     header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'Sys Power(W)']
     gsapi = GoogleSheetAPI(config['settings']['google_sheet_name'])
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
-    gsapi.append_row(header)
 
-    skip_models = args.start_with is not None
+    # check spreadsheet and start back on first unprocessed model
+    data_mx3 = gs.get_dataframe('A1:F712', includes_header=True)
+    if len(data_mx3) == 0:
+        gsapi.append_row(header)
+        last_processed = None
+    else:
+        last_processed = data_mx3.Model.iloc[-1]
+
+    if last_model_attempted and last_processed and last_model_attempted != last_processed:
+        # the last attempted model was not finished, so there was a failure. Record this to the spreadsheet and move on
+        row = [last_model_attempted, '', '', '', '', '', 'Failure']
+        gsapi.append_row(row)
+        last_processed = last_model_attempted
+
+    model_names = [mn[0] for mn in model_list]
+    start_idx = 0 
+    if last_processed:
+        start_idx = model_names.index(last_processed) + 1
+
     first_time = True
     batch_size = 1
 
-    for model_name, model_path in model_list:
+    for model_name, model_path in model_list[start_idx:]:
         print('\n')
         print(model_name)
         print(model_path)
-        if skip_models:
-            if model_name != args.start_with:
-                continue
-            skip_models = False
 
         # let the first time through be a warmup
         if first_time:
@@ -107,6 +125,9 @@ def main():
             first_time = False
 
         try:
+            with open('last_model_attempted.txt', 'wt') as fp:
+                fp.write(model_name)
+            
             results = bench.run_test(model_path)
             row = [model_name, 
                 results['resolution'],
