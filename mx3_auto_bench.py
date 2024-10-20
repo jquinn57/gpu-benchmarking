@@ -17,7 +17,7 @@ class AutoMX3Benchmark:
         self.kasa_reader = None
         
         self.running = False
-        if 'pmd' in settings:
+        if 'kasa' in settings:
             self.kasa_reader = KasaReader(*settings['kasa'])
 
     def shutdown(self):
@@ -46,7 +46,8 @@ class AutoMX3Benchmark:
                 # single frame, get latency
                 _, latency_ms, _ = accl.run(threading=False)
 
-            res = int(dfp_filename.split('_')[-1])
+            # extract resolution - hack specific to yolobench naming convention
+            res = int(dfp_filename.split('_')[-1].replace('/model.dfp', ''))
             output = {}
             output["batch_size"] = 1
             output["fps"] = fps
@@ -65,7 +66,7 @@ def get_model_list(root_dir):
             model_path = os.path.join(dirpath, 'model.dfp')
             model_list.append((model_name, model_path))
     model_list.sort()
-    return model_list[:3]
+    return model_list
 
 
 def main():
