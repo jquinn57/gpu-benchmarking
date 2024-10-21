@@ -93,13 +93,15 @@ def main():
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
 
     # check spreadsheet and start back on first unprocessed model
-    data_mx3 = gs.get_dataframe('A1:F712', includes_header=True)
+    data_mx3 = gsapi.get_dataframe('A1:F712', includes_header=True)
     if len(data_mx3) == 0:
         gsapi.append_row(header)
         last_processed = None
     else:
         last_processed = data_mx3.Model.iloc[-1]
-
+    
+    print(f'Last processed: {last_processed}')
+    print(f'Last attempted: {last_model_attempted}')
     if last_model_attempted and last_processed and last_model_attempted != last_processed:
         # the last attempted model was not finished, so there was a failure. Record this to the spreadsheet and move on
         row = [last_model_attempted, '', '', '', '', '', 'Failure']
@@ -111,7 +113,7 @@ def main():
     if last_processed:
         start_idx = model_names.index(last_processed) + 1
 
-    first_time = True
+    first_time = False
     batch_size = 1
 
     for model_name, model_path in model_list[start_idx:]:
