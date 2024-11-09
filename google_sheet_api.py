@@ -29,7 +29,7 @@ class GoogleSheetAPI():
             dataframe.columns = dataframe.iloc[0]
             dataframe = dataframe[1:]
 
-        dataframe = dataframe.apply(pd.to_numeric, errors='coerce')
+        # dataframe = dataframe.apply(pd.to_numeric, errors='coerce')
         return dataframe
 
     def update_cells(self, cell_range, values):

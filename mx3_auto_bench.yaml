@@ -1,0 +1,8 @@
+---
+settings:
+  num_images: 2000
+  kasa: ['192.168.1.119', 'MX3']
+  model_path: '/home/jquinn/yolobench/'
+  resolution: 416
+  google_sheet_name: 'MX3-Auto-Bench1'
+  google_sheet_tab: 0
