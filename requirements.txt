@@ -1,5 +1,5 @@
 pyyaml
-onnxruntime-gpu
+#onnxruntime-gpu
 pyserial
 opencv-python
 python-kasa
@@ -11,4 +11,4 @@ oauth2client
 onnx
 sbi4onnx
 onnx_graphsurgeon
-onnx-simplifier
+#onnx-simplifier

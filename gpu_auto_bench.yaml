@@ -1,10 +1,10 @@
 ---
 settings:
   num_images: 2000
-  onnx_ep: cuda
-  pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
-  model_path: '/home/jquinn/yolobench/'
+  onnx_ep: TensorRT
+    #  pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
+  model_path: '/ssd/yolobench/'
   resolution: 416
   google_sheet_name: 'GPU-Auto-Bench1'
-  google_sheet_tab: 3
-  batch_sizes: [1, 2, 4, 6, 8]
+  google_sheet_tab: '753647583'
+  batch_sizes: [1]

@@ -44,13 +44,17 @@ class AutoGPUBenchmark:
 
             self.num_images = self.settings['num_images']
             use_cuda = (self.settings['onnx_ep'].lower() == 'cuda')
-            trt_options = { 'trt_engine_cache_enable': True, 'trt_engine_cache_path': './trt_cache'}
+            trt_options = { 'trt_engine_cache_enable': False, 'trt_engine_cache_path': './trt_cache'}
             if use_cuda:
                 providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             else:
                 providers = [('TensorrtExecutionProvider', trt_options), 'CUDAExecutionProvider', 'CPUExecutionProvider']
             
-            session = onnxruntime.InferenceSession(onnx_filename, providers=providers)
+            sess_options = onnxruntime.SessionOptions()
+            #sess_options.intra_op_num_threads = 8
+            #sess_options.inter_op_num_threads = 2 
+
+            session = onnxruntime.InferenceSession(onnx_filename, providers=providers, sess_options=sess_options)
             output_names = [x.name for x in session.get_outputs()]
             print(output_names)
             input_name = session.get_inputs()[0].name
@@ -134,13 +138,25 @@ class AutoGPUBenchmark:
             return output
 
 def get_model_list(root_dir):
+    # select a subset for Sam
+    from itertools import product
+    resolutions = [160, 224, 320, 480]
+    versions = ['yolo3', 'yolo5', 'yolo8']
+    sizes = ['n', 's', 'm']
+    selected_models = [f'{v}{s}_{r}' for v, s, r in product(versions, sizes, resolutions)]
+
     model_list = []
     for dirpath, dirnames, filenames in os.walk(root_dir):
         if 'onnx_dynamic.onnx' in filenames:
             model_name = os.path.basename(dirpath)
-            model_path = os.path.join(dirpath, 'onnx_dynamic.onnx')
+            if model_name not in selected_models:
+                continue
+            #model_path = os.path.join(dirpath, 'onnx_dynamic.onnx')
+            model_path = os.path.join(dirpath, 'onnx_model_0.onnx')
             model_list.append((model_name, model_path))
     model_list.sort()
+    print(model_list)
+    print(f'Number of models: {len(model_list)}')
     return model_list
 
 
@@ -164,7 +180,7 @@ def main():
     gsapi.append_row(header)
 
     skip_models = args.start_with is not None
-    first_time = True
+    first_time = False
     batch_sizes = config['settings']['batch_sizes']
     for model_name, model_path in model_list:
         print('\n')
