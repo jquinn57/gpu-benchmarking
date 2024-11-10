@@ -44,15 +44,18 @@ class AutoGPUBenchmark:
 
             self.num_images = self.settings['num_images']
             use_cuda = (self.settings['onnx_ep'].lower() == 'cuda')
-            trt_options = { 'trt_engine_cache_enable': False, 'trt_engine_cache_path': './trt_cache'}
+            trt_options = { 'trt_engine_cache_enable': False, 
+                            'trt_engine_cache_path': './trt_cache', 
+                            'trt_fp16_enable': False,
+                            'trt_int8_enable': True, 
+                            'trt_int8_use_native_calibration_table': True, 
+                            'trt_int8_calibration_table_name': onnx_filename.replace('onnx_model_0.onnx', 'calib.cache')}
             if use_cuda:
                 providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             else:
                 providers = [('TensorrtExecutionProvider', trt_options), 'CUDAExecutionProvider', 'CPUExecutionProvider']
             
             sess_options = onnxruntime.SessionOptions()
-            #sess_options.intra_op_num_threads = 8
-            #sess_options.inter_op_num_threads = 2 
 
             session = onnxruntime.InferenceSession(onnx_filename, providers=providers, sess_options=sess_options)
             output_names = [x.name for x in session.get_outputs()]
@@ -85,7 +88,7 @@ class AutoGPUBenchmark:
             # option 1: create input once outside of loop (zeros or random)
             # img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
 
-            batch_q = queue.Queue()
+            batch_q = queue.Queue(maxsize=8)
             self.thread = threading.Thread(target=self.batch_worker, args=(batch_q, res, batch_size, nbatches))
             self.thread.start()
 
@@ -159,11 +162,25 @@ def get_model_list(root_dir):
     print(f'Number of models: {len(model_list)}')
     return model_list
 
+def convert_to_fp16(model_list):
+    import onnx
+    from onnxconverter_common import float16
+    new_model_list = []
+    print('converting models to FP16')
+    for model_name, model_path in model_list:
+        model_fp32 = onnx.load(model_path)
+        model_fp16 = float16.convert_float_to_float16(model_fp32, keep_io_types=True)
+        new_model_path = model_path.replace('model_0.onnx', 'model_0_fp16.onnx')
+        new_model_list.append((model_name, new_model_path))
+        onnx.save(model_fp16, new_model_path)
+    print(new_model_list)
+    return new_model_list
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='Path to config yaml', default='gpu_auto_bench.yaml')
     parser.add_argument('--start_with', help='Model in sorted list to start with', default=None)
+    parser.add_argument('--fp16', action='store_true', help='convert onnx model to FP16')
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -172,6 +189,8 @@ def main():
     
     onnx_model_path = config['settings']['model_path']
     model_list = get_model_list(onnx_model_path)
+    if args.fp16:
+        model_list = convert_to_fp16(model_list)
 
     bench = AutoGPUBenchmark(config['settings'])
     header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)']
