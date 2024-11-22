@@ -12,12 +12,14 @@ import threading
 import queue
 from pmd_reader import PMDReader
 from google_sheet_api import GoogleSheetAPI
+from kasa_reader import KasaReader
 
 
 class AutoGPUBenchmark:
     def __init__(self, settings):
         self.settings = settings
         self.pmd_reader = None
+        self.kasa_reader = None
         
         self.running = False
         if 'pmd' in settings:
@@ -25,10 +27,15 @@ class AutoGPUBenchmark:
             if not self.pmd_reader.check_device():
                 print('PMD not found')
                 self.pmd_reader = None
+        if 'kasa' in settings:
+            self.kasa_reader = KasaReader(*settings['kasa'])
+
 
     def shutdown(self):
         if self.pmd_reader:
             self.pmd_reader.stop_reading()
+        if self.kasa_reader:
+            self.kasa_reader.stop_reading()
 
     def batch_worker(self, batch_q, res, batch_size, nbatches):
 
@@ -47,7 +54,7 @@ class AutoGPUBenchmark:
             trt_options = { 'trt_engine_cache_enable': False, 
                             'trt_engine_cache_path': './trt_cache', 
                             'trt_fp16_enable': False,
-                            'trt_int8_enable': True, 
+                            'trt_int8_enable': False, 
                             'trt_int8_use_native_calibration_table': True, 
                             'trt_int8_calibration_table_name': onnx_filename.replace('onnx_model_0.onnx', 'calib.cache')}
             if use_cuda:
@@ -84,6 +91,8 @@ class AutoGPUBenchmark:
 
             if self.pmd_reader:
                 self.pmd_reader.start_reading()
+            if self.kasa_reader:
+                self.kasa_reader.start_reading()
 
             # option 1: create input once outside of loop (zeros or random)
             # img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
@@ -122,6 +131,11 @@ class AutoGPUBenchmark:
             else:
                 power_avg_pmd = 0
 
+            if self.kasa_reader:
+                power_avg_kasa = self.kasa_reader.avg_recent_readings()
+            else:
+                power_avg_kasa = 0
+
             # worst case latency - time to wait to gather batch_size images plus inference time for batch
             latency_ms = (2 * batch_size - 1) * time_per_image
 
@@ -130,6 +144,7 @@ class AutoGPUBenchmark:
             output["inference_time_ms"] = time_per_image
             output["fps"] = fps
             output["pcie_power"] = power_avg_pmd
+            output["sys_power"] = power_avg_kasa
             output["count"] = count
             output["total_time_s"] = dt
             output["latency_ms"] = latency_ms
@@ -193,7 +208,7 @@ def main():
         model_list = convert_to_fp16(model_list)
 
     bench = AutoGPUBenchmark(config['settings'])
-    header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)']
+    header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)', 'Sys Power(W)']
     gsapi = GoogleSheetAPI(config['settings']['google_sheet_name'])
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
     gsapi.append_row(header)
@@ -224,7 +239,8 @@ def main():
                     results['batch_size'],
                     results['fps'],
                     results['latency_ms'],
-                    results['pcie_power']]
+                    results['pcie_power'],
+                    results['sys_power']]
                 gsapi.append_row(row)
             except Exception as e:
                 print(e)

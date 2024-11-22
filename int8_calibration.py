@@ -41,7 +41,7 @@ def calib_data(resolution):
         # (as `int`s), Polygraphy `DeviceView`s, or PyTorch tensors instead of NumPy arrays.
         #
         # For details on `DeviceView`, see `polygraphy/cuda/cuda.py`.
-        yield {"images": np.random.random(shape=(1, 3, resolution, resolution), dtype=np.float32)}  
+        yield {"images": np.random.random((1, 3, resolution, resolution)).astype(np.float32)}  
 
 
 def main(model_path):
@@ -70,7 +70,7 @@ def main(model_path):
     # see the logging output from TensorRT, we can temporarily increase logging verbosity:
     with G_LOGGER.verbosity(G_LOGGER.VERBOSE), TrtRunner(build_engine) as runner:
         # Finally, we can test out our int8 TensorRT engine with some dummy input data:
-        inp_data = np.random.random(shape=(1, 3, res, res), dtype=np.float32)
+        inp_data =  np.random.random((1, 3, res, res)).astype(np.float32)
 
         # NOTE: The runner owns the output buffers and is free to reuse them between `infer()` calls.
         # Thus, if you want to store results from multiple inferences, you should use `copy.deepcopy()`.
