@@ -8,7 +8,7 @@ google-auth-httplib2
 google-auth-oauthlib 
 gspread 
 oauth2client
-onnx
-sbi4onnx
-onnx_graphsurgeon
+#onnx
+#sbi4onnx
+#onnx_graphsurgeon
 #onnx-simplifier

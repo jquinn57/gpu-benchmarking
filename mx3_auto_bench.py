@@ -59,10 +59,18 @@ class AutoMX3Benchmark:
             return output
 
 def get_model_list(root_dir):
+    # select a subset for Sam
+    from itertools import product
+    resolutions = [160, 224, 320, 480]
+    versions = ['yolo3', 'yolo5', 'yolo8']
+    sizes = ['n', 's', 'm']
+    selected_models = [f'{v}{s}_{r}' for v, s, r in product(versions, sizes, resolutions)]
     model_list = []
     for dirpath, dirnames, filenames in os.walk(root_dir):
         if 'model.dfp' in filenames:
             model_name = os.path.basename(dirpath)
+            #if model_name not in selected_models:
+            #    continue
             model_path = os.path.join(dirpath, 'model.dfp')
             model_list.append((model_name, model_path))
     model_list.sort()
