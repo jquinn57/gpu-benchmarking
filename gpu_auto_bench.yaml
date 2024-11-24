@@ -1,10 +1,11 @@
 ---
 settings:
   num_images: 2000
-  onnx_ep: cuda
-  pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
-  model_path: '/home/jquinn/yolobench/'
+  onnx_ep: TensorRT
+  kasa: ['192.168.1.119', 'MX3']
+    #  pmd: ['/dev/ttyUSB0', ['PCIE1', 'PCIE2']]
+  model_path: '/ssd/yolobench/'
   resolution: 416
-  google_sheet_name: 'GPU-Auto-Bench1'
-  google_sheet_tab: 3
-  batch_sizes: [1, 2, 4, 6, 8]
+  google_sheet_name: 'Jetson-NX-16GB'
+  google_sheet_tab: '1106319986'
+  batch_sizes: [1]

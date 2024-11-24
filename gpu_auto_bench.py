@@ -12,12 +12,14 @@ import threading
 import queue
 from pmd_reader import PMDReader
 from google_sheet_api import GoogleSheetAPI
+from kasa_reader import KasaReader
 
 
 class AutoGPUBenchmark:
     def __init__(self, settings):
         self.settings = settings
         self.pmd_reader = None
+        self.kasa_reader = None
         
         self.running = False
         if 'pmd' in settings:
@@ -25,10 +27,15 @@ class AutoGPUBenchmark:
             if not self.pmd_reader.check_device():
                 print('PMD not found')
                 self.pmd_reader = None
+        if 'kasa' in settings:
+            self.kasa_reader = KasaReader(*settings['kasa'])
+
 
     def shutdown(self):
         if self.pmd_reader:
             self.pmd_reader.stop_reading()
+        if self.kasa_reader:
+            self.kasa_reader.stop_reading()
 
     def batch_worker(self, batch_q, res, batch_size, nbatches):
 
@@ -44,13 +51,20 @@ class AutoGPUBenchmark:
 
             self.num_images = self.settings['num_images']
             use_cuda = (self.settings['onnx_ep'].lower() == 'cuda')
-            trt_options = { 'trt_engine_cache_enable': True, 'trt_engine_cache_path': './trt_cache'}
+            trt_options = { 'trt_engine_cache_enable': False, 
+                            'trt_engine_cache_path': './trt_cache', 
+                            'trt_fp16_enable': False,
+                            'trt_int8_enable': False, 
+                            'trt_int8_use_native_calibration_table': True, 
+                            'trt_int8_calibration_table_name': onnx_filename.replace('onnx_model_0.onnx', 'calib.cache')}
             if use_cuda:
                 providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             else:
                 providers = [('TensorrtExecutionProvider', trt_options), 'CUDAExecutionProvider', 'CPUExecutionProvider']
             
-            session = onnxruntime.InferenceSession(onnx_filename, providers=providers)
+            sess_options = onnxruntime.SessionOptions()
+
+            session = onnxruntime.InferenceSession(onnx_filename, providers=providers, sess_options=sess_options)
             output_names = [x.name for x in session.get_outputs()]
             print(output_names)
             input_name = session.get_inputs()[0].name
@@ -77,11 +91,13 @@ class AutoGPUBenchmark:
 
             if self.pmd_reader:
                 self.pmd_reader.start_reading()
+            if self.kasa_reader:
+                self.kasa_reader.start_reading()
 
             # option 1: create input once outside of loop (zeros or random)
             # img_batch = np.zeros((batch_size, 3, res, res)).astype(np.float32)
 
-            batch_q = queue.Queue()
+            batch_q = queue.Queue(maxsize=8)
             self.thread = threading.Thread(target=self.batch_worker, args=(batch_q, res, batch_size, nbatches))
             self.thread.start()
 
@@ -115,6 +131,11 @@ class AutoGPUBenchmark:
             else:
                 power_avg_pmd = 0
 
+            if self.kasa_reader:
+                power_avg_kasa = self.kasa_reader.avg_recent_readings()
+            else:
+                power_avg_kasa = 0
+
             # worst case latency - time to wait to gather batch_size images plus inference time for batch
             latency_ms = (2 * batch_size - 1) * time_per_image
 
@@ -123,6 +144,7 @@ class AutoGPUBenchmark:
             output["inference_time_ms"] = time_per_image
             output["fps"] = fps
             output["pcie_power"] = power_avg_pmd
+            output["sys_power"] = power_avg_kasa
             output["count"] = count
             output["total_time_s"] = dt
             output["latency_ms"] = latency_ms
@@ -134,20 +156,46 @@ class AutoGPUBenchmark:
             return output
 
 def get_model_list(root_dir):
+    # select a subset for Sam
+    from itertools import product
+    resolutions = [160, 224, 320, 480]
+    versions = ['yolo3', 'yolo5', 'yolo8']
+    sizes = ['n', 's', 'm']
+    selected_models = [f'{v}{s}_{r}' for v, s, r in product(versions, sizes, resolutions)]
+
     model_list = []
     for dirpath, dirnames, filenames in os.walk(root_dir):
         if 'onnx_dynamic.onnx' in filenames:
             model_name = os.path.basename(dirpath)
-            model_path = os.path.join(dirpath, 'onnx_dynamic.onnx')
+            if model_name not in selected_models:
+                continue
+            #model_path = os.path.join(dirpath, 'onnx_dynamic.onnx')
+            model_path = os.path.join(dirpath, 'onnx_model_0.onnx')
             model_list.append((model_name, model_path))
     model_list.sort()
+    print(model_list)
+    print(f'Number of models: {len(model_list)}')
     return model_list
 
+def convert_to_fp16(model_list):
+    import onnx
+    from onnxconverter_common import float16
+    new_model_list = []
+    print('converting models to FP16')
+    for model_name, model_path in model_list:
+        model_fp32 = onnx.load(model_path)
+        model_fp16 = float16.convert_float_to_float16(model_fp32, keep_io_types=True)
+        new_model_path = model_path.replace('model_0.onnx', 'model_0_fp16.onnx')
+        new_model_list.append((model_name, new_model_path))
+        onnx.save(model_fp16, new_model_path)
+    print(new_model_list)
+    return new_model_list
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='Path to config yaml', default='gpu_auto_bench.yaml')
     parser.add_argument('--start_with', help='Model in sorted list to start with', default=None)
+    parser.add_argument('--fp16', action='store_true', help='convert onnx model to FP16')
     args = parser.parse_args()
 
     with open(args.config) as fp:
@@ -156,15 +204,17 @@ def main():
     
     onnx_model_path = config['settings']['model_path']
     model_list = get_model_list(onnx_model_path)
+    if args.fp16:
+        model_list = convert_to_fp16(model_list)
 
     bench = AutoGPUBenchmark(config['settings'])
-    header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)']
+    header = ['Model', 'Resolution', 'Batch Size', 'FPS', 'Latency(ms)', 'PCIe Power(W)', 'Sys Power(W)']
     gsapi = GoogleSheetAPI(config['settings']['google_sheet_name'])
     gsapi.open_worksheet(config['settings']['google_sheet_tab'])
     gsapi.append_row(header)
 
     skip_models = args.start_with is not None
-    first_time = True
+    first_time = False
     batch_sizes = config['settings']['batch_sizes']
     for model_name, model_path in model_list:
         print('\n')
@@ -189,7 +239,8 @@ def main():
                     results['batch_size'],
                     results['fps'],
                     results['latency_ms'],
-                    results['pcie_power']]
+                    results['pcie_power'],
+                    results['sys_power']]
                 gsapi.append_row(row)
             except Exception as e:
                 print(e)
