@@ -54,7 +54,8 @@ class AutoGPUBenchmark:
             trt_options = { 'trt_engine_cache_enable': False, 
                             'trt_engine_cache_path': './trt_cache', 
                             'trt_fp16_enable': False,
-                            'trt_int8_enable': False, 
+                            'trt_int8_enable': False,
+                            'trt_dla_enable': False,
                             'trt_int8_use_native_calibration_table': True, 
                             'trt_int8_calibration_table_name': onnx_filename.replace('onnx_model_0.onnx', 'calib.cache')}
             if use_cuda:
