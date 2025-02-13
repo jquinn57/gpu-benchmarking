@@ -3,4 +3,4 @@ settings:
   kasa: ['192.168.1.119', 'nuc']
   model_path: '/ssd/yolobench/'
   google_sheet_name: 'Jetson-Orin-Nano-Super+AGX32'
-  google_sheet_tab: '375192165'
+  google_sheet_tab: '891097791'

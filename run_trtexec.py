@@ -20,7 +20,7 @@ def get_model_list(root_dir):
             model_name = os.path.basename(dirpath)
             if model_name not in selected_models:
                 continue
-            model_path = os.path.join(dirpath, 'onnx_model_0_fp16.onnx')
+            model_path = os.path.join(dirpath, 'onnx_model_0.onnx')
             model_list.append((model_name, model_path))
     model_list.sort()
     print(model_list)
@@ -34,7 +34,7 @@ def get_throughput(onnx_path, kasa_reader):
     command = [
         "/usr/src/tensorrt/bin/trtexec",
         f"--onnx={onnx_path}",
-        f"--fp16",
+        f"--int8",
         f"--loadEngine={engine_path}"
     ]
     
@@ -44,7 +44,7 @@ def get_throughput(onnx_path, kasa_reader):
     throughput_line = None
     for line in iter(process.stdout.readline, ''):
         print(line, end="")
-        if "Throughput" in line:
+        if "Throughput:" in line:
             throughput_line = line.strip()
     
     process.wait()

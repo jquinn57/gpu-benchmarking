@@ -53,7 +53,7 @@ class AutoGPUBenchmark:
             use_cuda = (self.settings['onnx_ep'].lower() == 'cuda')
             trt_options = { 'trt_engine_cache_enable': False, 
                             'trt_engine_cache_path': './trt_cache', 
-                            'trt_fp16_enable': False,
+                            'trt_fp16_enable': True,
                             'trt_int8_enable': False,
                             'trt_dla_enable': False,
                             'trt_int8_use_native_calibration_table': True, 
@@ -171,7 +171,7 @@ def get_model_list(root_dir):
             if model_name not in selected_models:
                 continue
             #model_path = os.path.join(dirpath, 'onnx_dynamic.onnx')
-            model_path = os.path.join(dirpath, 'onnx_model_0.onnx')
+            model_path = os.path.join(dirpath, 'onnx_model_0_fp16.onnx')
             model_list.append((model_name, model_path))
     model_list.sort()
     print(model_list)

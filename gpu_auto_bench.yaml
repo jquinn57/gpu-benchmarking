@@ -7,5 +7,5 @@ settings:
   model_path: '/ssd/yolobench/'
   resolution: 416
   google_sheet_name: 'Jetson-Orin-Nano-Super+AGX32'
-  google_sheet_tab: '1848090387'
+  google_sheet_tab: '1965491702'
   batch_sizes: [1]
